@@ -74,6 +74,7 @@ extension EnvironmentService {
         _ newValue: Computed<Key, Output>,
         keyPath: WritableKeyPath<Storage, Computed<Key, Output>>
     ) {
+        guard !isDropped else { return }
         let valueID = ValueID(keyPath: keyPath)
         env.setValue(newValue, keyPath: keyPath)
         // Ignore only the notify this write triggers, then stop ignoring it.
@@ -88,6 +89,7 @@ extension EnvironmentService {
         keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>,
         key: DictKey
     ) {
+        guard !isDropped else { return }
         let valueID = ValueID(keyPath: keyPath)
         env.setValue(newValue, keyPath: keyPath, key: key)
         // Ignore only the notify this write triggers, then stop ignoring it.

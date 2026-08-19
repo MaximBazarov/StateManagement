@@ -69,6 +69,17 @@ public protocol Source: AnyObject {
         key: Key,
         in env: SourceEnvironment
     )
+
+    /// Bind died because this Address's Container dropped. Default is empty.
+    func dropped<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>
+    )
+
+    /// Bind died because this keyed Address's Container dropped. Default is empty.
+    func dropped<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key
+    )
 }
 
 extension Source {
@@ -83,5 +94,16 @@ extension Source {
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,
         in env: SourceEnvironment
+    ) {}
+
+    /// Default so a Keyed-only Source can omit the Atomic overload.
+    public func dropped<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>
+    ) {}
+
+    /// Default so an Atomic-only Source can omit the Keyed overload.
+    public func dropped<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key
     ) {}
 }

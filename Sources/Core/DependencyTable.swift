@@ -28,6 +28,8 @@ import Foundation
         edges[input, default: []].insert(element)
     }
 
+    var keys: [ValueID] { Array(edges.keys) }
+
     /// Returns the elements registered on `input` and drops them. Empty if none.
     mutating func take(_ input: ValueID) -> Set<Element> {
         edges.removeValue(forKey: input) ?? []

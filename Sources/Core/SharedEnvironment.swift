@@ -36,6 +36,9 @@ import Foundation
     /// Grouped Executions live here so Join and newestWins share one slot per Identity.
     private var identitySlots: [ExecutionGroup: IdentitySlot] = [:]
 
+    /// Every in-flight Execution, including `runAll`. Reset Cancels this set.
+    private var liveExecutions: [UUID: Execution] = [:]
+
     var sourceWarehouse: [ObjectIdentifier: any Source] = [:]
     var sourceBinds: [ValueID: SourceBinding] = [:]
     var pendingHandle: (any AsyncStateHandle)?
@@ -393,6 +396,7 @@ import Foundation
         line: UInt
     ) -> Execution {
         let execution = Execution()
+        liveExecutions[execution.id] = execution
         let task = Task { @MainActor in
             do throws(Op.Failure) {
                 try await self.execute(operation, execution: execution, file: file, line: line)
@@ -412,6 +416,7 @@ import Foundation
         line: UInt
     ) -> Execution {
         let execution = Execution()
+        liveExecutions[execution.id] = execution
         let task = Task { @MainActor in
             await self.execute(operation, execution: execution, file: file, line: line)
             self.finishIdentity(execution, group: group, error: nil)
@@ -421,6 +426,7 @@ import Foundation
     }
 
     private func finishIdentity(_ execution: Execution, group: ExecutionGroup, error: (any Error)?) {
+        liveExecutions[execution.id] = nil
         guard let slot = identitySlots[group], slot.live.id == execution.id else {
             return
         }
@@ -434,6 +440,8 @@ import Foundation
         file: String,
         line: UInt
     ) async throws(Op.Failure) {
+        let live = execution ?? beginRunAllExecution()
+        defer { if execution == nil { liveExecutions[live.id] = nil } }
         try await TraceContext.withSpan(
             "Operation: \(String(describing: type(of: operation)))",
             kind: .user,
@@ -441,7 +449,7 @@ import Foundation
             line: Int(line)
         ) { () async throws(Op.Failure) in
             do throws(Op.Failure) {
-                let environment = AsyncOperationEnvironment(self, execution: execution)
+                let environment = AsyncOperationEnvironment(self, execution: live)
                 try await operation.perform(in: environment)
             } catch {
                 TraceContext.log("failed")
@@ -456,15 +464,23 @@ import Foundation
         file: String,
         line: UInt
     ) async {
+        let live = execution ?? beginRunAllExecution()
+        defer { if execution == nil { liveExecutions[live.id] = nil } }
         await TraceContext.withSpan(
             "Operation: \(String(describing: type(of: operation)))",
             kind: .user,
             file: file,
             line: Int(line)
         ) {
-            let environment = AsyncOperationEnvironment(self, execution: execution)
+            let environment = AsyncOperationEnvironment(self, execution: live)
             await operation.perform(in: environment)
         }
+    }
+
+    private func beginRunAllExecution() -> Execution {
+        let execution = Execution()
+        liveExecutions[execution.id] = execution
+        return execution
     }
 
     // MARK: - Service -
@@ -497,6 +513,38 @@ import Foundation
         let service = Service(env: self)
         serviceWarehouse[id] = service
         return (service, true)
+    }
+
+    // MARK: - Reset -
+
+    func resetAll() {
+        cancelAllExecutions()
+        dropAllServices()
+        dropAllBinds()
+        sourceWarehouse.removeAll()
+        observation.invalidateSubscribed()
+        warehouse.removeAll()
+    }
+
+    func resetContainer<Storage: StateContainer>(_ type: Storage.Type) {
+        cancelAllExecutions()
+        dropBinds(in: type)
+        observation.invalidateSubscribed(in: type)
+        warehouse.removeValue(forKey: StorageID(type))
+    }
+
+    private func cancelAllExecutions() {
+        for execution in liveExecutions.values {
+            execution.isCancelled = true
+            execution.task?.cancel()
+        }
+    }
+
+    private func dropAllServices() {
+        for service in serviceWarehouse.values {
+            service.isDropped = true
+        }
+        serviceWarehouse.removeAll()
     }
 }
 

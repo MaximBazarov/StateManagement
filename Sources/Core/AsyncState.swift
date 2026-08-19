@@ -35,6 +35,7 @@ protocol AsyncStateHandle: AnyObject {
 
     func resolveSource(in env: SharedEnvironment) -> any Source
     func callProvide(_ source: any Source, _ env: SourceEnvironment, key: AnyHashable?)
+    func callDropped(_ source: any Source, key: AnyHashable?)
     func writeDeliver(_ value: Any, key: AnyHashable?)
     func writeFail(_ error: any Error, key: AnyHashable?)
     func writeClear(key: AnyHashable?)
@@ -56,6 +57,7 @@ public final class AsyncState<S: Source, Value, Status> {
     var statusKeyPath: AnyKeyPath?
     var storageValueKeyPath: AnyKeyPath?
     var provideOpener: ((S, SourceEnvironment, AnyHashable?) -> Void)?
+    var droppedOpener: ((S, AnyHashable?) -> Void)?
     var deliverWriter: ((Any, AnyHashable?) -> Void)?
     var failWriter: ((any Error, AnyHashable?) -> Void)?
     var clearWriter: ((AnyHashable?) -> Void)?
@@ -189,6 +191,33 @@ public final class AsyncState<S: Source, Value, Status> {
             }
             source.provide(sourced, in: env)
         }
+        droppedOpener = { source, key in
+            if let key, let dictType = Value.self as? any AsyncStateDictionary.Type {
+                Self.droppedKeyedDictionary(
+                    dictType,
+                    source: source,
+                    sourced: sourced,
+                    key: key
+                )
+                return
+            }
+            source.dropped(sourced)
+        }
+    }
+
+    /// Opens `Value` as `[Key: Output]` so keyed `dropped` is not lost to overload resolution.
+    private static func droppedKeyedDictionary<Storage: StateContainer, D: AsyncStateDictionary>(
+        _ type: D.Type,
+        source: S,
+        sourced: KeyPath<Storage, Value>,
+        key: AnyHashable
+    ) {
+        guard let typedKey = key.base as? D.DictKey else { return }
+        guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
+            source.dropped(sourced)
+            return
+        }
+        source.dropped(dictPath, key: typedKey)
     }
 
     /// Opens `Value` as `[Key: Output]` so keyed `provide` is not lost to overload resolution.
@@ -244,6 +273,11 @@ extension AsyncState: AsyncStateHandle {
     func callProvide(_ source: any Source, _ env: SourceEnvironment, key: AnyHashable?) {
         guard let typed = source as? S else { return }
         provideOpener?(typed, env, key)
+    }
+
+    func callDropped(_ source: any Source, key: AnyHashable?) {
+        guard let typed = source as? S else { return }
+        droppedOpener?(typed, key)
     }
 
     func writeDeliver(_ value: Any, key: AnyHashable?) {

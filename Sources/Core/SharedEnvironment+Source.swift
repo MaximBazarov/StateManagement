@@ -298,4 +298,41 @@ extension SharedEnvironment {
             observation.invalidateValue(at: statusID)
         }
     }
+
+    func dropAllBinds() {
+        for bind in uniqueBinds {
+            endBind(bind)
+        }
+        sourceBinds.removeAll()
+    }
+
+    func dropBinds<Storage: StateContainer>(in type: Storage.Type) {
+        var kept: [ValueID: SourceBinding] = [:]
+        var ended: Set<ObjectIdentifier> = []
+        for (id, bind) in sourceBinds {
+            if bindBelongs(bind, to: type) {
+                let token = ObjectIdentifier(bind)
+                if ended.insert(token).inserted {
+                    endBind(bind)
+                }
+            } else {
+                kept[id] = bind
+            }
+        }
+        sourceBinds = kept
+    }
+
+    private func bindBelongs<Storage: StateContainer>(
+        _ bind: SourceBinding,
+        to type: Storage.Type
+    ) -> Bool {
+        bind.handle.sourcedKeyPath is PartialKeyPath<Storage>
+            || bind.handle.statusKeyPath is PartialKeyPath<Storage>
+            || bind.handle.storageValueKeyPath is PartialKeyPath<Storage>
+    }
+
+    private func endBind(_ bind: SourceBinding) {
+        let source = bind.handle.resolveSource(in: self)
+        bind.handle.callDropped(source, key: bind.key)
+    }
 }

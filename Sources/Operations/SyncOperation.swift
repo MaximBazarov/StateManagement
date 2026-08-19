@@ -100,4 +100,14 @@ import Foundation
     ) {
         environment.removeValue(keyPath: keyPath, key: key)
     }
+
+    /// Drops every Container, Service, and Source. Cancels every in-flight Execution.
+    public func reset() {
+        environment.resetAll()
+    }
+
+    /// Drops the named Container type and its Binds. Cancels every in-flight Execution.
+    public func reset<Storage: StateContainer>(_ type: Storage.Type) {
+        environment.resetContainer(type)
+    }
 }

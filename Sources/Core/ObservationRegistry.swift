@@ -60,6 +60,19 @@ import Foundation
         changes.formUnion(dependencyGraph.invalidate(input: valueID))
     }
 
+    /// Marks every currently subscribed Address changed so live Watchers re-read after a drop.
+    func invalidateSubscribed() {
+        for valueID in receivers.keys {
+            invalidateValue(at: valueID)
+        }
+    }
+
+    func invalidateSubscribed<Storage: StateContainer>(in type: Storage.Type) {
+        for valueID in receivers.keys where valueID.valueKeyPathID is PartialKeyPath<Storage> {
+            invalidateValue(at: valueID)
+        }
+    }
+
     // MARK: - Notify -
 
     /// Drains the operation's changed IDs and calls each affected receiver once.

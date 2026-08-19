@@ -76,6 +76,9 @@ import Foundation
     /// right after, so it only ever suppresses that one notify.
     internal var ignoreNotificationsFor: Set<ValueID> = []
 
+    /// Dropped by `reset()`. Remaining `serve()` may finish; writes do not land.
+    internal var isDropped = false
+
     /// True while a ``serve()`` run is in flight. Guards single-flight: a change that arrives now
     /// coalesces instead of starting a second run.
     internal var isServing: Bool = false
@@ -109,7 +112,7 @@ import Foundation
     /// Runs synchronously inside `notifyAll()`. Coalesces to the latest and never starts a second run.
     lazy var notificationReceiver = NotificationReceiver {
         [weak self] updatedValueIDs in
-        guard let self else { return }
+        guard let self, !self.isDropped else { return }
 
         let relevant = updatedValueIDs.subtracting(self.ignoreNotificationsFor)
         guard !relevant.isEmpty else { return }
@@ -132,9 +135,14 @@ import Foundation
     /// cooperative, so a cancelled run can still finish last. Finishing every run keeps side effects
     /// whole and keeps latest-wins.
     func startServing() {
+        guard !isDropped else { return }
         isServing = true
         Task { @MainActor [weak self] in
             guard let self else { return }
+            if self.isDropped {
+                self.isServing = false
+                return
+            }
             repeat {
                 self.hasPendingWork = false
                 // A previous run's own writes stop being ignored before this run.
@@ -144,8 +152,9 @@ import Foundation
                 self.pendingValues = []
                 await self.serve()
                 // Staying subscribed is automatic, re-register on the inputs after every run.
+                if self.isDropped { break }
                 self.resubscribe()
-            } while self.hasPendingWork
+            } while self.hasPendingWork && !self.isDropped
             self.isServing = false
         }
     }
@@ -170,6 +179,7 @@ import Foundation
         file: String = #fileID,
         line: UInt = #line
     ) throws(Op.Failure) {
+        guard !isDropped else { return }
         try env.perform(operation, file: file, line: line)
     }
 
@@ -192,6 +202,8 @@ import Foundation
     public func getValue<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
+        // Dropped Service must not recreate warehouse State by reading.
+        guard !isDropped else { return Storage()[keyPath: keyPath] }
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath)
@@ -206,6 +218,8 @@ import Foundation
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
+        // Dropped Service must not recreate warehouse State by reading.
+        guard !isDropped else { return Storage()[keyPath: keyPath][key] }
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath, key: key)
@@ -221,6 +235,7 @@ import Foundation
         _ newValue: Value,
         keyPath: WritableKeyPath<Storage, Value>
     ) {
+        guard !isDropped else { return }
         let valueID = ValueID(keyPath: keyPath)
         env.setValue(newValue, keyPath: keyPath)
         // Ignore this write in the notify that follows, then stop ignoring it so a
@@ -241,6 +256,7 @@ import Foundation
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
+        guard !isDropped else { return }
         let valueID = ValueID(keyPath: keyPath)
         env.setValue(newValue, keyPath: keyPath, key: key)
         // Same as the atomic setValue: ignore only the notify this write triggers.
