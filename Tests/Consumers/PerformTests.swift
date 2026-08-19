@@ -52,6 +52,25 @@ struct LoadInitialState: AsyncOperation {
     }
 }
 
+/// Parks on `gate` so a test can observe `isInProgress` while the Execution is live.
+struct HoldThenMarkLoaded: AsyncOperation {
+    var reentrancy: ReentrancyDecision { .runAll }
+    let gate: HoldGate
+    func perform(in env: AsyncOperationEnvironment) async {
+        await gate.holdHere()
+        env.perform(MarkLoaded())
+    }
+}
+
+struct HoldFirstWins: AsyncOperation {
+    var reentrancy: ReentrancyDecision { .firstWins(.wholeOperation) }
+    let gate: HoldGate
+    func perform(in env: AsyncOperationEnvironment) async {
+        await gate.holdHere()
+        env.perform(MarkLoaded())
+    }
+}
+
 // MARK: - SwiftUI host fixtures
 
 // `Perform` resolves its target through `@Environment(\.sharedEnvironment)`,
@@ -97,6 +116,74 @@ struct PerformAsyncAwaitView: View {
         Color.clear.task {
             await perform(LoadInitialState())
             onFinished()
+        }
+    }
+}
+
+/// Copies `perform.isInProgress` onto `probe` so a test can read the public flag
+/// without reaching into the wrapper.
+@MainActor
+final class InProgressProbe {
+    var isInProgress = false
+}
+
+@MainActor
+struct PerformInProgressView<Op: AsyncOperation>: View {
+    let operation: Op
+    var duplicate: Bool = false
+    let probe: InProgressProbe
+    @Perform var perform
+    var body: some View {
+        Color.clear
+            .onAppear {
+                perform(operation)
+                if duplicate {
+                    perform(operation)
+                }
+                probe.isInProgress = perform.isInProgress
+            }
+            .background {
+                let _ = Self.report(probe, perform.isInProgress)
+                Color.clear
+            }
+    }
+
+    private static func report(_ probe: InProgressProbe, _ flag: Bool) {
+        probe.isInProgress = flag
+    }
+}
+
+@MainActor
+struct PerformAwaitInProgressView: View {
+    let gate: HoldGate
+    let probe: InProgressProbe
+    @Perform var perform
+    var body: some View {
+        Color.clear
+            .task {
+                // Type context picks the async overload; `await perform(op)` can bind the fire-and-forget one.
+                let run: @MainActor (HoldThenMarkLoaded, String, UInt) async -> Void = perform.callAsFunction
+                await run(HoldThenMarkLoaded(gate: gate), #fileID, #line)
+            }
+            .background {
+                let _ = Self.report(probe, perform.isInProgress)
+                Color.clear
+            }
+    }
+
+    private static func report(_ probe: InProgressProbe, _ flag: Bool) {
+        probe.isInProgress = flag
+    }
+}
+
+@MainActor
+struct PerformSyncInProgressView: View {
+    let probe: InProgressProbe
+    @Perform var perform
+    var body: some View {
+        Color.clear.onAppear {
+            perform(IncrementCount())
+            probe.isInProgress = perform.isInProgress
         }
     }
 }
@@ -154,6 +241,112 @@ struct PerformTests {
         #expect(done, "awaiting overload never completed")
         // Once the await returned, the effect must already be visible.
         #expect(reader.read(\PerformState.loaded))
+    }
+
+    @Test("isInProgress is true while the Execution this wrapper started is in flight")
+    func isInProgressWhileOwnedExecutionIsInFlight() async throws {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+        let probe = InProgressProbe()
+
+        let host = HostedView.mount(
+            PerformInProgressView(
+                operation: HoldThenMarkLoaded(gate: gate),
+                probe: probe
+            ).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        await gate.waitForArrival()
+        #expect(probe.isInProgress)
+
+        gate.release()
+        let cleared = await waitUntil { !probe.isInProgress }
+        #expect(cleared, "isInProgress stayed true after the Execution exited")
+    }
+
+    @Test("A fire-and-forget firstWins duplicate does not set isInProgress")
+    func firstWinsDuplicateDoesNotSetInProgress() async throws {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+        let probe = InProgressProbe()
+
+        let host = HostedView.mount(
+            PerformInProgressView(
+                operation: HoldFirstWins(gate: gate),
+                duplicate: true,
+                probe: probe
+            ).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        await gate.waitForArrival()
+        #expect(gate.arrivals == 1)
+        #expect(probe.isInProgress)
+
+        gate.release()
+        let cleared = await waitUntil { !probe.isInProgress }
+        #expect(cleared, "duplicate firstWins left isInProgress stuck true")
+    }
+
+    @Test("Sync perform does not set isInProgress")
+    func syncPerformDoesNotSetInProgress() async throws {
+        let env = SharedEnvironment()
+        let probe = InProgressProbe()
+        let host = HostedView.mount(
+            PerformSyncInProgressView(probe: probe).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        let reader = await env.spawnService(StateReader.self)
+        let landed = await waitUntil { reader.read(\PerformState.count) == 1 }
+        #expect(landed)
+        #expect(!probe.isInProgress)
+    }
+
+    @Test("isInProgress is true while this wrapper awaits a Join or its own Execution")
+    func isInProgressWhileAwaiting() async throws {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+        let probe = InProgressProbe()
+
+        let host = HostedView.mount(
+            PerformAwaitInProgressView(gate: gate, probe: probe).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        await gate.waitForArrival()
+        let seen = await waitUntil { probe.isInProgress }
+        #expect(seen, "awaited perform did not set isInProgress")
+
+        gate.release()
+        let cleared = await waitUntil { !probe.isInProgress }
+        #expect(cleared, "isInProgress stayed true after the await returned")
+    }
+
+    @Test("isInProgress stays true after Cancel until the body exits")
+    func isInProgressStaysTrueAfterCancelUntilBodyExits() async throws {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+        let probe = InProgressProbe()
+
+        let host = HostedView.mount(
+            PerformInProgressView(
+                operation: HoldThenMarkLoaded(gate: gate),
+                probe: probe
+            ).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        await gate.waitForArrival()
+        #expect(probe.isInProgress)
+
+        env.perform(ResetAll())
+        #expect(probe.isInProgress)
+
+        gate.release()
+        let cleared = await waitUntil { !probe.isInProgress }
+        #expect(cleared, "isInProgress stayed true after the cancelled body exited")
     }
 
 #endif

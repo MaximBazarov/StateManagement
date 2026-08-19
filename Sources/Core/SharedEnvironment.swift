@@ -308,28 +308,39 @@ import Foundation
         file: String = #fileID,
         line: UInt = #line
     ) {
+        _ = performFireAndForget(operation, file: file, line: line, onFinish: nil)
+    }
+
+    /// So `@Perform` can count only Executions this handle started.
+    func performFireAndForget<Op: AsyncOperation>(
+        _ operation: Op,
+        file: String,
+        line: UInt,
+        onFinish: (@MainActor () -> Void)?
+    ) -> Bool {
         switch operation.reentrancy.kind {
         case .runAll:
             Task { @MainActor in
-                await self.execute(operation, file: file, line: line)
+                await self.execute(operation, onFinish: onFinish, file: file, line: line)
             }
+            return true
         case .firstWins(let identity):
-            applyIdentity(
+            return applyIdentity(
                 operationType: ObjectIdentifier(type(of: operation)),
                 identity: identity,
                 replaces: false,
                 waiter: nil
             ) { group in
-                self.startIdentityExecution(operation, group: group, file: file, line: line)
+                self.startIdentityExecution(operation, group: group, file: file, line: line, onFinish: onFinish)
             }
         case .newestWins(let identity):
-            applyIdentity(
+            return applyIdentity(
                 operationType: ObjectIdentifier(type(of: operation)),
                 identity: identity,
                 replaces: true,
                 waiter: nil
             ) { group in
-                self.startIdentityExecution(operation, group: group, file: file, line: line)
+                self.startIdentityExecution(operation, group: group, file: file, line: line, onFinish: onFinish)
             }
         }
     }
@@ -389,31 +400,35 @@ import Foundation
         }
     }
 
+    @discardableResult
     private func applyIdentity(
         operationType: ObjectIdentifier,
         identity: ReentrancyIdentity,
         replaces: Bool,
         waiter: ((Result<Void, any Error>) -> Void)?,
         start: (ExecutionGroup) -> Execution
-    ) {
+    ) -> Bool {
         let group = ExecutionGroup(
             operationType: operationType,
             identity: identity
         )
 
         if let slot = identitySlots[group] {
+            var started = false
             if replaces {
                 slot.cancelLive()
                 slot.live = start(group)
+                started = true
             }
             slot.addWaiter(waiter)
-            return
+            return started
         }
 
         let execution = start(group)
         let slot = IdentitySlot(live: execution)
         identitySlots[group] = slot
         slot.addWaiter(waiter)
+        return true
     }
 
     private func startIdentityExecution<Op: ThrowingAsyncOperation>(
@@ -440,9 +455,11 @@ import Foundation
         _ operation: Op,
         group: ExecutionGroup,
         file: String,
-        line: UInt
+        line: UInt,
+        onFinish: (@MainActor () -> Void)? = nil
     ) -> Execution {
         let execution = Execution()
+        execution.onFinish = onFinish
         liveExecutions[execution.id] = execution
         let task = Task { @MainActor in
             await self.execute(operation, execution: execution, file: file, line: line)
@@ -454,6 +471,7 @@ import Foundation
 
     private func finishIdentity(_ execution: Execution, group: ExecutionGroup, error: (any Error)?) {
         liveExecutions[execution.id] = nil
+        execution.complete()
         guard let slot = identitySlots[group], slot.live.id == execution.id else {
             return
         }
@@ -488,11 +506,20 @@ import Foundation
     private func execute<Op: AsyncOperation>(
         _ operation: Op,
         execution: Execution? = nil,
+        onFinish: (@MainActor () -> Void)? = nil,
         file: String,
         line: UInt
     ) async {
         let live = execution ?? beginRunAllExecution()
-        defer { if execution == nil { liveExecutions[live.id] = nil } }
+        if execution == nil {
+            live.onFinish = onFinish
+        }
+        defer {
+            if execution == nil {
+                liveExecutions[live.id] = nil
+                live.complete()
+            }
+        }
         await TraceContext.withSpan(
             "Operation: \(String(describing: type(of: operation)))",
             kind: .user,
@@ -581,4 +608,11 @@ final class Execution {
     let id = UUID()
     var isCancelled = false
     var task: Task<Void, Never>?
+    var onFinish: (@MainActor () -> Void)?
+
+    func complete() {
+        let callback = onFinish
+        onFinish = nil
+        callback?()
+    }
 }

@@ -13,7 +13,25 @@
 //===----------------------------------------------------------------------===//
 
 #if canImport(SwiftUI)
+import Combine
 import SwiftUI
+
+/// Counts Executions this `@Perform` instance started or is awaiting.
+@MainActor
+final class PerformInFlight: ObservableObject {
+    private(set) var count = 0
+    var isInProgress: Bool { count > 0 }
+
+    func begin() {
+        objectWillChange.send()
+        count += 1
+    }
+
+    func end() {
+        objectWillChange.send()
+        count -= 1
+    }
+}
 
 /// A write-only handle a view uses to dispatch state operations into the ``SharedEnvironment``.
 ///
@@ -36,8 +54,11 @@ import SwiftUI
 @MainActor
 public struct Perform: DynamicProperty {
     @Environment(\.sharedEnvironment) private var environment
+    @StateObject private var inFlight: PerformInFlight
 
-    public init() {}
+    public init() {
+        self._inFlight = StateObject(wrappedValue: PerformInFlight())
+    }
 
     /// The callable handle vended by ``Perform/wrappedValue``.
     ///
@@ -46,10 +67,15 @@ public struct Perform: DynamicProperty {
     @MainActor
     public struct Runner {
         private let environment: SharedEnvironment
+        private let inFlight: PerformInFlight
 
-        init(_ environment: SharedEnvironment) {
+        init(_ environment: SharedEnvironment, inFlight: PerformInFlight) {
             self.environment = environment
+            self.inFlight = inFlight
         }
+
+        /// True while this handle has a started Execution, or an awaited Join, still in flight.
+        public var isInProgress: Bool { inFlight.isInProgress }
 
         /// Dispatches a synchronous operation, applying its mutations and notifying observers once.
         public func callAsFunction<Op: ThrowingSyncOperation>(
@@ -60,7 +86,7 @@ public struct Perform: DynamicProperty {
             try environment.perform(operation, file: file, line: line)
         }
 
-        /// Dispatches an asynchronous operation as a detached task, returning immediately.
+        /// Dispatches an asynchronous operation without waiting, returning immediately.
         ///
         /// Use this from synchronous contexts (button actions, gestures). To wait for completion
         /// from an `async` context, use the awaiting overload below instead.
@@ -70,7 +96,18 @@ public struct Perform: DynamicProperty {
             file: String = #fileID,
             line: UInt = #line
         ) {
-            environment.perform(operation, file: file, line: line)
+            let inFlight = self.inFlight
+            let started = environment.performFireAndForget(
+                operation,
+                file: file,
+                line: line,
+                onFinish: { [weak inFlight] in
+                    inFlight?.end()
+                }
+            )
+            if started {
+                inFlight.begin()
+            }
         }
 
         /// Dispatches an asynchronous operation and suspends until it completes.
@@ -81,6 +118,8 @@ public struct Perform: DynamicProperty {
             file: String = #fileID,
             line: UInt = #line
         ) async {
+            inFlight.begin()
+            defer { inFlight.end() }
             await environment.perform(operation, file: file, line: line)
         }
 
@@ -90,13 +129,15 @@ public struct Perform: DynamicProperty {
             file: String = #fileID,
             line: UInt = #line
         ) async throws(Op.Failure) {
+            inFlight.begin()
+            defer { inFlight.end() }
             try await environment.perform(operation, file: file, line: line)
         }
     }
 
     /// A ``Runner`` bound to the resolved environment. Call it directly to dispatch an operation.
     public var wrappedValue: Runner {
-        Runner(environment)
+        Runner(environment, inFlight: inFlight)
     }
 }
 #endif

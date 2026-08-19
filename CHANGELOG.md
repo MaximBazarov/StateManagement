@@ -11,6 +11,8 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ### Added
 
+- `Perform.Runner.isInProgress` is true while that `@Perform` handle has a started Execution or an awaited Join in flight ([ADR 0002](docs/adr/0002-AsyncOperation.md)).
+
 - `SharedEnvironment.read` snapshots a Value without subscribing. A Combine object, or any caller outside a Container, can read `.shared` this way.
 - `@SMPublished` replaces `@Published` on a `StateContainer` that is also `ObservableObject`. Leftover `instance.thisValue` / `$thisValue` always use `SharedEnvironment.shared`. Watch, Computed, and Operations use the Environment they were given ([ADR 0011](docs/adr/0011-Bridging-Combine-Published-State.md)).
 - Every async Operation declares `reentrancy`. `runAll` lets overlapping Executions proceed. `firstWins` Joins the live Execution of an Identity. `newestWins` Cancels the previous live Execution and moves awaiters onto the new one. Cancel is Task cancellation plus a Sync write door ([ADR 0002](docs/adr/0002-AsyncOperation.md)).

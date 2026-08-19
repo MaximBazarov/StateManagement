@@ -197,6 +197,22 @@ struct ResetExecutionTests {
         #expect(env.read(\ResetBox.counter) == 0)
     }
 
+    @Test("A cancelled awaiter resumes success after the body exits")
+    func cancelledAwaiterResumesSuccessWhenBodyExits() async {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+        let task = Task { @MainActor in
+            await env.perform(HoldThenSetResetCounter(gate: gate, value: 9))
+        }
+        await gate.waitForArrival()
+
+        env.perform(ResetAll())
+        gate.release()
+        await task.value
+
+        #expect(env.read(\ResetBox.counter) == 0)
+    }
+
     @Test("A Sync child after reset() in the same Async Operation is discarded")
     func resetCancelsParentExecution() async {
         let env = SharedEnvironment()
