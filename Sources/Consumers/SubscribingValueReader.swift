@@ -14,11 +14,13 @@
 
 import Foundation
 
+// Tests and other modules name this type. The user catalog does not start here.
 /// Reads the value subscribing for its next update.
 /// When value is `Equitable`, suppresses the notifications if it's equal to the most recent value.
 ///
 /// Change is reported through the single `onChange()` so it can be wired up to any publisher.
 ///
+@_documentation(visibility: private)
 @MainActor public final class SubscribingValueReader<Storage: StateContainer, Value> {
 
     let valueID: ValueID

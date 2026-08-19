@@ -14,9 +14,11 @@
 
 import Foundation
 
+// Tests and other modules name this type. The user catalog does not start here.
 /// An object that is notified by ``ObservationRegistry`` when ``ValueID`` changes.
 /// Receives a set of all values' IDs changed within the operation that notified.
 /// To subscribe to the changes of the value use ``ObservationRegistry/subscribe(receiver:valueID:)``.
+@_documentation(visibility: private)
 @MainActor public final class NotificationReceiver: @MainActor Hashable {
 
     var id: String {

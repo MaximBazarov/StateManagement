@@ -14,8 +14,10 @@
 
 import Foundation
 
+// Tests and other modules name this type. The user catalog does not start here.
 /// Identifier of the instance of the Storage.
 /// We use ObjectIdentifier of the type
+@_documentation(visibility: private)
 public struct StorageID: Hashable, Equatable {
     let id: ObjectIdentifier
 

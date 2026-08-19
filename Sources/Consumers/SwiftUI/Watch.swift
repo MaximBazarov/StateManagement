@@ -28,7 +28,7 @@ extension SubscribingValueReader: ObservableObject {}
 /// body when that state changes.
 ///
 /// `Watch` is a thin adapter: all of the observation logic lives in
-/// ``SubscribingValueReader`` (which is SwiftUI-independent and therefore unit-testable
+/// `SubscribingValueReader` (which is SwiftUI-independent and therefore unit-testable
 /// headlessly). `Watch` only supplies the `SharedEnvironment` from the SwiftUI
 /// environment and keeps the reader alive in a `@StateObject`.
 ///
@@ -41,7 +41,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
     @Environment(\.sharedEnvironment) private var environment
 
     /// SwiftUI friendly way to store the reader, that will not recreate for the same view.
-    /// For SwiftUI code only we extent the ``SubscribingValueReader`` with ObservableObject conformance and we connect the `onChange` in `watching` function.
+    /// For SwiftUI code only we extend `SubscribingValueReader` with ObservableObject conformance and we connect the `onChange` in `watching` function.
     ///
     /// > Quote from Apple docs: SwiftUI creates a new instance of the model object only once during the lifetime of the container that declares the state object. For example, SwiftUI doesn’t create a new instance if a view’s inputs change, but does create a new instance if the identity of a view changes. When published properties of the observable object change, SwiftUI updates any view that depends on those properties, like the Text view in the above example.
     ///
@@ -89,7 +89,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
 
     // MARK: - Internals
 
-    /// Builds the reader (``SubscribingValueReader``) and sends `objectWillChange` on its `onChange`.
+    /// Builds the reader (`SubscribingValueReader`) and sends `objectWillChange` on its `onChange`.
     private static func watching(
         reader: SubscribingValueReader<Storage, Value>
     ) -> SubscribingValueReader<Storage, Value> {

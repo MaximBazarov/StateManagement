@@ -14,6 +14,7 @@
 
 import Foundation
 
+// Tests and other modules name this type. The user catalog does not start here.
 /// The registrar of change notifications. It does not store values, ``SharedEnvironment`` does that.
 /// It wires three parts: the receivers watching each ``ValueID``, the ``ChangeBuffer`` that collects
 /// what changed during one operation, and the ``DependencyGraph`` that invalidates derived values.
@@ -22,6 +23,7 @@ import Foundation
 /// operation it calls ``notifyAll()`` once, which drains the buffer and calls every affected
 /// receiver. Subscriptions are one-shot: a receiver is dropped when notified, so it re-subscribes by
 /// reading again.
+@_documentation(visibility: private)
 @MainActor public final class ObservationRegistry {
 
     /// The receivers watching each ``ValueID``.

@@ -14,12 +14,14 @@
 
 import Foundation
 
+// Tests and other modules name this type. The user catalog does not start here.
 /// A unique identifier for values stored in a ``StateContainer``.
 ///
 /// > **Implementation Detail**: Uses `AnyKeyPath` instead of `ObjectIdentifier(keyPath)` to ensure
 /// > stable value-based keypath equality and hashing. In Swift, `ObjectIdentifier` compares reference identity
 /// > of keypath objects, which can vary across compiler contexts, modules, and dynamic instances, causing
 /// > subscriptions to miss updates. `AnyKeyPath` provides reliable structural comparison.
+@_documentation(visibility: private)
 public struct ValueID: Hashable, CustomDebugStringConvertible {
     /// The keypath referencing the state value. Conforms to `Hashable` and `Equatable` using value-based equality.
     let valueKeyPathID: AnyKeyPath

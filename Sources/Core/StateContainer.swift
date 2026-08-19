@@ -17,7 +17,7 @@ import Foundation
 /// A class that holds a slice of application state as plain stored properties.
 ///
 /// You never create or hold a container yourself. The environment owns exactly one instance per type,
-/// created lazily on first access and identified by the type itself (its ``StorageID``). Every read and
+/// created lazily on first access and identified by the type itself. Every read and
 /// write goes through a key path into that shared instance, so `\ListContainer.items` always refers to
 /// the same storage no matter where it is read from.
 ///
