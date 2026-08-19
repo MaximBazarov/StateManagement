@@ -72,9 +72,14 @@ final class PerKeyCycleState: StateContainer {
 /// (exit test), builds its own environment, and reads the offending computed;
 /// the guard reports the full chain through the telemetry channel and then
 /// `fatalError`s with the same message. We observe stderr to confirm the report.
+///
+/// Exit tests spawn a subprocess. Swift Testing does not provide that API on
+/// iOS, so the three trap tests compile out there. `nonCyclicKeyDoesNotTrap`
+/// still runs on every declared platform.
 @MainActor
 struct ComputedCycleGuardTests {
 
+    #if os(macOS)
     /// `A → A` crashes; the message names the cycle.
     @Test func directCycleTraps() async {
         let result = await #expect(
@@ -133,6 +138,7 @@ struct ComputedCycleGuardTests {
             "expected the cycle report on stderr, got: \(text.isEmpty ? "<empty>" : text)"
         )
     }
+    #endif
 
     /// A non-cyclic key in the same container does not crash and returns its value.
     @Test func nonCyclicKeyDoesNotTrap() {

@@ -18,13 +18,13 @@ Small changes do not need an ADR. Bug fixes, tests, doc comments, and typo fixes
 
 ## Build and test
 
-You need Swift 6.2 or later.
+You need Swift 6.2 or later, and Xcode (not Command Line Tools alone).
 
 - Build: `swift build`
 - Test (macOS / host): `swift test`
-- Test (iOS Simulator): `xcodebuild test -scheme StateManagement -destination 'platform=iOS Simulator,name=iPhone 16'`
+- Test (iOS Simulator): `xcodebuild test -scheme StateManagement-Package -destination 'platform=iOS Simulator,name=iPhone 17'`
 
-CI runs the suite on a macOS **and** an iOS Simulator on every pull request (matrix in `.github/workflows/ci.yml`), so run both locally before opening one. The iOS leg mainly catches platform-only API leaks early.
+CI runs the suite on a macOS **and** an iOS Simulator on every pull request (matrix in `.github/workflows/ci.yml`), so run both locally before opening one. The iOS leg mainly catches platform-only API leaks early. Cycle-guard trap tests use Swift Testing exit tests (a subprocess); that API is unavailable on iOS, so those three compile out there and the rest of the target still runs.
 
 Most tests are headless: they drive `ValueObserver` directly through `ValueObserverProbe`, so they run anywhere `swift test` runs and carry the behavioural coverage. One test (`watchSwiftUIIntegration`) mounts a real SwiftUI host — `NSHostingController` on macOS, `UIHostingController` on iOS — to prove the `@Watch` wiring. It needs a host, so it compiles out where neither AppKit nor UIKit exists. It is deterministic via `waitUntil` (polls for the re-render, no sleeps); a timeout there means the `@Watch` wiring genuinely failed to re-render, not flake.
 
