@@ -1,0 +1,33 @@
+{
+  "configurations" : [
+    {
+      "id" : "4489C017-5CF9-4650-9546-B6435720259C",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : {
+      "targets" : [
+        {
+          "containerPath" : "container:",
+          "identifier" : "StateManagement",
+          "name" : "StateManagement"
+        }
+      ]
+    },
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "StateManagement_Tests",
+        "name" : "StateManagement_Tests"
+      }
+    }
+  ],
+  "version" : 1
+}

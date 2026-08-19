@@ -1,0 +1,130 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the StateManagement package open source project
+//
+// Copyright (c) 2025-2035 Maxim Bazarov and the StateManagement package
+// open source project authors
+// Licensed under MIT
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: MIT
+//
+//===----------------------------------------------------------------------===//
+
+import Foundation
+
+/// The key type of an atomic (non-keyed) ``Computed``.
+///
+/// You never write this yourself: a single-argument `@Computed` closure infers it. It only shows up
+/// in the inferred type `Computed<NoKey, Output>` and in diagnostics.
+public enum NoKey: Hashable {
+    case noKey
+}
+
+/// A value derived from other values, that is kept up to date automatically.
+/// The function that derives the new value is provided with the ``ComputationEnvironment`` instance and whenever reads
+/// other values registers as a `dependant` of them.
+/// Whenever any of those values change, the value of the ``Computed`` is invalidated
+/// and will be recalculated on the next read.
+/// As other states in container, readers are notified when value changes.
+///
+/// > Note The result is cached. The closure runs on the first read, then the value is reused until invalidated.
+/// Reading the same computed from many places in one update costs one computation.
+///
+/// In the following simple example `count` and `itemLength`
+/// are automatically recomputed when `ListContainer.items` change and readers are notified.
+/// ```swift
+/// final class ListContainer: StateContainer {
+///     var items: [UUID] = []
+///
+///     // Atomic computed is equal to the count of the items.
+///     @Computed var count = { env in
+///         env.getValue(\ListContainer.items).count
+///     }
+///
+///     // Keyed computed, is equal to the length of the item at provided id.
+///     @Computed<UUID, Bool> var itemLength = { env, key in
+///         env.getValue(\ListContainer.items, key: id).count
+///     }
+/// }
+/// ```
+///
+@propertyWrapper
+@MainActor public final class Computed<Key: Hashable, Output> {
+
+    // MARK: - Property Wrapper
+
+    /// Computation closure produces the value from the state it reads, for a given key.
+    /// An atomic computed (`Key == NoKey`).
+    public let wrappedValue: (ComputationEnvironment, Key) -> Output
+
+    public var projectedValue: Computed<Key, Output> { self }
+
+    // MARK: - Cache
+
+    /// Cached outputs, one entry per key. An atomic computed (`Key == NoKey`)
+    /// holds at most one entry, under ``NoKey/noKey``.
+    private var cache: [Key: Output] = [:]
+
+    // MARK: - Init
+
+    /// Computation takes a key as its second parameter, deriving a value per key.
+    public init(wrappedValue: @escaping (ComputationEnvironment, Key) -> Output) {
+        self.wrappedValue = wrappedValue
+    }
+
+    /// Computation takes only the environment, no key.
+    public init(wrappedValue: @escaping (ComputationEnvironment) -> Output) where Key == NoKey {
+        self.wrappedValue = { env, _ in wrappedValue(env) }
+    }
+
+    // MARK: - Read
+
+    /// The single way any computed value is read, by ``Watch``, by ``EnvironmentService``, and by
+    /// other computeds (atomic and keyed alike). Subscribes `receiver` so the
+    /// consumer is notified when this value changes, then serves the cache: returns the stored output
+    /// if present, otherwise runs the closure once, stores the result, and returns it. The closure
+    /// re-registers its dependency edges and installs the hook that clears this cache entry when an
+    /// input changes, so a later cache hit is safe — it only happens while those edges still hold.
+    ///
+    /// `evaluating` is the history of computeds currently mid-read, threaded down the recursion
+    /// (top-level callers rely on the default). If this `valueID` is already in that history, the
+    /// closure is about to read itself — a dependency cycle: the chain is reported through telemetry
+    /// and then trapped. A cache hit returns before the check, so it can never recurse. See ADR 0004
+    /// (composition) and ADR 0014 (cycle guard).
+    func read(
+        env: SharedEnvironment,
+        valueID: ValueID,
+        receiver: NotificationReceiver,
+        key: Key,
+        evaluating: [ValueID] = []
+    ) -> Output {
+        env.observation.subscribe(receiver: receiver, valueID: valueID)
+        if let cached = cache[key] {
+            return cached
+        }
+
+        if let start = evaluating.firstIndex(of: valueID) {
+            let cycle = (evaluating[start...] + [valueID])
+                .map(\.debugDescription)
+                .joined(separator: " → ")
+            let message = "Computed dependency cycle: \(cycle)"
+            TraceContext.log(message)   // report (telemetry channel, best-effort)
+            fatalError(message)         // trap (always-on guarantee)
+        }
+
+        let dependent = Dependent(id: valueID) { [weak self] in
+            self?.cache[key] = nil
+        }
+        let compEnv = ComputationEnvironment(
+            env: env,
+            notificationReceiver: receiver,
+            dependent: dependent,
+            evaluating: evaluating + [valueID]
+        )
+        let value = wrappedValue(compEnv, key)
+        cache[key] = value
+        return value
+    }
+}

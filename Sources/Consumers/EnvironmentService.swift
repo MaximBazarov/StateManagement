@@ -1,0 +1,251 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the StateManagement package open source project
+//
+// Copyright (c) 2025-2035 Maxim Bazarov and the StateManagement package
+// open source project authors
+// Licensed under MIT
+//
+// See LICENSE.txt for license information
+//
+// SPDX-License-Identifier: MIT
+//
+//===----------------------------------------------------------------------===//
+
+import Foundation
+
+/// A base class for services that respond to state changes within a shared environment.
+///
+/// Services managed by a SharedEnvironment must override ``serve()`` to perform work when their dependencies update. The environment calls this method whenever a value previously read by the service changes.
+///
+/// The service is a reliable latest-wins reactor. Contract:
+/// - Latest-wins: a follow-up run always reads the current state, so the final change is never lost.
+/// - Single-flight: one ``serve()`` run at a time, never overlapping. Changes during a run coalesce.
+/// - Finish-then-follow: a running ``serve()`` completes, then follows the latest if a change arrived. It is never cancelled mid-run, so side effects stay whole.
+/// - Re-subscribes itself: after each run the service re-registers on its inputs, so it keeps reacting to the latest state without re-reading.
+///
+/// > Important: To prevent infinite recursion, the environment automatically tracks the IDs of values the service modifies. Calls to ``serve()`` won't happen if the only value that changed are changed by the service.
+///
+///
+/// ## Implementation Details
+///  - why subclassing not protocol or anything?
+///
+/// ## Example
+/// ```swift
+/// final class UpdatesCounterService: EnvironmentService {
+///
+///     override func serve() async {
+///         guard !isSetup else {
+///             // Optional step if we need a separate setup
+///             return await setup()
+///         }
+///         let x = getValue(\Counter.x)
+///
+///         // here normally serve() would be called again as we read x before.
+///         // however since this service is the one who mutated it, we ignore such updates, so it's safe.
+///         setValue(x + 1, keyPath: \Counter.x)
+///     }
+///
+///     func setup() async {
+///         // Do necessary instantiations and preparations
+///         // Read values that we are interested in,
+///         // otherwise environment won't know what to notify about.
+///         let x = getValue(\Counter.x)
+///     }
+/// }
+/// ```
+///
+/// - `init` must not have side-effects,
+/// - use `setup` method for subscription and initial setup.
+@MainActor open class EnvironmentService {
+
+    /// Environment
+    internal let env: SharedEnvironment
+
+    static func id() -> ObjectIdentifier {
+        ObjectIdentifier(type(of: Self.self))
+    }
+
+    /// Creates a service and saves the provided environment as its environment.
+    public required init(env: SharedEnvironment) {
+        self.env = env
+    }
+
+    /// IDs this service just wrote, so the notify that write triggers is ignored and the service
+    /// does not react to its own change. An ID is added right before the write's notify and removed
+    /// right after, so it only ever suppresses that one notify.
+    internal var ignoreNotificationsFor: Set<ValueID> = []
+
+    /// True while a ``serve()`` run is in flight. Guards single-flight: a change that arrives now
+    /// coalesces instead of starting a second run.
+    internal var isServing: Bool = false
+
+    /// A relevant change arrived while serving. This mark is held across the `Task` hop, so the
+    /// final change is never lost. When set, the serving loop runs one more time.
+    internal var hasPendingWork: Bool = false
+
+    /// Changed IDs that arrived while serving, waiting for the next run to read them.
+    /// Handed to ``updatedValues`` at the top of each iteration, so a run always sees the latest set.
+    internal var pendingValues: Set<ValueID> = []
+
+    /// Returns true if the `serve` was called after the service initialization.
+    public var isSetup: Bool {
+        updatedValues == []
+    }
+
+    /// Override this function to define what to do when values you read were updated.
+    /// Similar to SwiftUI View body, but instead of drawing service does its job based on the current state of values.
+    ///
+    /// > Important: Always will be called once after the service initialisation.
+    /// If you need to know whether the `serve` was called after the initialisation or after the updates check ``isSetup``
+    open func serve() async {
+
+    }
+
+    /// Contains value IDs updated during the last operation.
+    /// Flushed after ``serve()``.
+    internal var updatedValues: Set<ValueID> = []
+
+    /// Runs synchronously inside `notifyAll()`. Coalesces to the latest and never starts a second run.
+    lazy var notificationReceiver = NotificationReceiver {
+        [weak self] updatedValueIDs in
+        guard let self else { return }
+
+        let relevant = updatedValueIDs.subtracting(self.ignoreNotificationsFor)
+        guard !relevant.isEmpty else { return }
+
+        // Accumulate. Two coalesced notifications union, they never overwrite each other.
+        self.pendingValues.formUnion(relevant)
+
+        // A run is already in flight, mark it and let that run follow the latest.
+        guard !self.isServing else {
+            self.hasPendingWork = true
+            return
+        }
+
+        self.startServing()
+    }
+
+    /// One `Task`, finish-then-follow. Every run completes, then follows the latest if a change arrived.
+    ///
+    /// We do not cancel and restart. ``serve()`` does side effects, and Swift cancellation is
+    /// cooperative, so a cancelled run can still finish last. Finishing every run keeps side effects
+    /// whole and keeps latest-wins.
+    func startServing() {
+        isServing = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            repeat {
+                self.hasPendingWork = false
+                // A previous run's own writes stop being ignored before this run.
+                self.ignoreNotificationsFor = []
+                // Hand the accumulated changes to this run, so `wasUpdated` and `serve()` see them.
+                self.updatedValues = self.pendingValues
+                self.pendingValues = []
+                await self.serve()
+                // Staying subscribed is automatic, re-register on the inputs after every run.
+                self.resubscribe()
+            } while self.hasPendingWork
+            self.isServing = false
+        }
+    }
+
+    /// Resubscribe to the values.
+    /// We need to do it because of the observation auto subscription cleanup.
+    /// Every time the value is consumed, receiver is unsubscribed from further updates of the value.
+    func resubscribe() {
+        updatedValues.forEach { valueID in
+            env.observation.subscribe(
+                receiver: notificationReceiver,
+                valueID: valueID
+            )
+        }
+    }
+
+    // MARK: - I/O -
+
+    /// Forwards to the Environment so throw, notify, and the span stay one path.
+    public func perform<Op: ThrowingSyncOperation>(
+        _ operation: Op,
+        file: String = #fileID,
+        line: UInt = #line
+    ) throws(Op.Failure) {
+        try env.perform(operation, file: file, line: line)
+    }
+
+    public func wasUpdated<Storage: StateContainer, Value>(
+        _ valueKeyPath: KeyPath<Storage, Value>
+    ) -> Bool {
+        updatedValues.contains(ValueID(keyPath: valueKeyPath))
+    }
+
+    public func wasUpdated<Storage: StateContainer, Value>(
+        _ valueKeyPaths: [KeyPath<Storage, Value>]
+    ) -> Bool {
+        valueKeyPaths.contains { keyPath in
+            updatedValues.contains(ValueID(keyPath: keyPath))
+        }
+    }
+
+    /// Get value subscribing.
+    /// - Parameter keyPath: path to the value e.g. `\MyState.myValue`.
+    public func getValue<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>
+    ) -> Value {
+        env.observation.subscribe(
+            receiver: notificationReceiver,
+            valueID: ValueID(keyPath: keyPath)
+        )
+        return env.getValue(keyPath: keyPath)
+    }
+
+    /// Get value subscribing.
+    ///   - keyPath: path to the value e.g. `\MyState.myValue`.
+    ///   - key: dictionary key of the value.
+    public func getValue<Storage: StateContainer, Key: Hashable, Value>(
+        keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key
+    ) -> Value? {
+        env.observation.subscribe(
+            receiver: notificationReceiver,
+            valueID: ValueID(keyPath: keyPath, key: key)
+        )
+        return env.getValue(keyPath: keyPath, key: key)
+    }
+
+    /// Set value at path.
+    /// - Parameters:
+    ///   - newValue: New value.
+    ///   - keyPath: path to the value e.g. `\MyState.myValue`.
+    public func setValue<Storage: StateContainer, Value>(
+        _ newValue: Value,
+        keyPath: WritableKeyPath<Storage, Value>
+    ) {
+        let valueID = ValueID(keyPath: keyPath)
+        env.setValue(newValue, keyPath: keyPath)
+        // Ignore this write in the notify that follows, then stop ignoring it so a
+        // later external change to the same value still reacts. The callback runs
+        // synchronously inside notifyAll, so the ignore has done its job on return.
+        ignoreNotificationsFor.insert(valueID)
+        env.observation.notifyAll()
+        ignoreNotificationsFor.remove(valueID)
+    }
+
+    /// Sets a dictionary value at path.
+    /// - Parameters:
+    ///   - newValue: new value.
+    ///   - keyPath: path to the value e.g. `\MyState.myValue`.
+    ///   - key: dictionary key of the value.
+    public func setValue<Storage: StateContainer, Key: Hashable, Value>(
+        _ newValue: Value,
+        keyPath: WritableKeyPath<Storage, [Key: Value]>,
+        key: Key
+    ) {
+        let valueID = ValueID(keyPath: keyPath)
+        env.setValue(newValue, keyPath: keyPath, key: key)
+        // Same as the atomic setValue: ignore only the notify this write triggers.
+        ignoreNotificationsFor.insert(valueID)
+        env.observation.notifyAll()
+        ignoreNotificationsFor.remove(valueID)
+    }
+}
