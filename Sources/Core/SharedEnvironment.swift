@@ -25,6 +25,10 @@ import Foundation
 
     public init() {}
 
+    /// Non-nil while `getValue` / `setValue` / `removeValue` is on the warehouse instance.
+    /// Leftover Combine uses this mark to tell Watch/getValue apart from `instance.thisValue`.
+    static var warehouseAccess: SharedEnvironment?
+
     /// Cache of the ``StateContainer`` that has been read.
     private var warehouse: [StorageID: StateContainer] = [:]
 
@@ -83,9 +87,16 @@ import Foundation
     }
 
     // MARK: - I/O -
+    private func withWarehouseAccess<T>(_ body: () -> T) -> T {
+        let previous = Self.warehouseAccess
+        Self.warehouseAccess = self
+        defer { Self.warehouseAccess = previous }
+        return body()
+    }
+
     /// Provides the storage of a given type
     /// that conforms to ``EnvironmentStateStorage``
-    private func getStorage<Storage: StateContainer>(_ storageType: Storage.Type) -> Storage {
+    func getStorage<Storage: StateContainer>(_ storageType: Storage.Type) -> Storage {
         let id = StorageID(storageType)
 
         // Trying to get existing value
@@ -111,8 +122,10 @@ import Foundation
     func getValue<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) -> Value {
-        let storage = getStorage(Storage.self)
-        return accessSourced(storage, keyPath: keyPath, key: nil)
+        withWarehouseAccess {
+            let storage = getStorage(Storage.self)
+            return accessSourced(storage, keyPath: keyPath, key: nil)
+        }
     }
 
     /// Sets a value at the given key path and reports a change for observation.
@@ -120,22 +133,24 @@ import Foundation
         _ newValue: Value,
         keyPath: WritableKeyPath<Storage, Value>
     ) {
-        var storage = getStorage(Storage.self)
-        storage[keyPath: keyPath] = newValue
-        let valueID = ValueID(
-            keyPath: keyPath
-        )
-        #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
-        TraceContext.withSpan(
-            "Set: \(valueID.debugDescription)",
-            kind: .internal,
-            valueDescription: String(describing: newValue)
-        ) {
+        withWarehouseAccess {
+            var storage = getStorage(Storage.self)
+            storage[keyPath: keyPath] = newValue
+            let valueID = ValueID(
+                keyPath: keyPath
+            )
+            #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
+            TraceContext.withSpan(
+                "Set: \(valueID.debugDescription)",
+                kind: .internal,
+                valueDescription: String(describing: newValue)
+            ) {
+                observation.invalidateValue(at: valueID)
+            }
+            #else
             observation.invalidateValue(at: valueID)
+            #endif
         }
-        #else
-        observation.invalidateValue(at: valueID)
-        #endif
     }
 
     // MARK: - Dictionary
@@ -153,9 +168,11 @@ import Foundation
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
-        let storage = getStorage(Storage.self)
-        _ = accessSourced(storage, keyPath: keyPath, key: AnyHashable(key))
-        return storage[keyPath: keyPath][key]
+        withWarehouseAccess {
+            let storage = getStorage(Storage.self)
+            _ = accessSourced(storage, keyPath: keyPath, key: AnyHashable(key))
+            return storage[keyPath: keyPath][key]
+        }
     }
 
     /// Sets a dictionary value for the given key and reports a change for observation.
@@ -164,20 +181,25 @@ import Foundation
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
-        var storage = getStorage(Storage.self)
-        storage[keyPath: keyPath][key] = newValue
-        let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
-        #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
-        TraceContext.withSpan(
-            "Set: \(valueID.debugDescription)",
-            kind: .internal,
-            valueDescription: String(describing: newValue)
-        ) {
+        withWarehouseAccess {
+            var storage = getStorage(Storage.self)
+            storage[keyPath: keyPath][key] = newValue
+            let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
+            let dictionaryID = ValueID(keyPath: keyPath)
+            #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
+            TraceContext.withSpan(
+                "Set: \(valueID.debugDescription)",
+                kind: .internal,
+                valueDescription: String(describing: newValue)
+            ) {
+                observation.invalidateValue(at: valueID)
+                observation.invalidateValue(at: dictionaryID)
+            }
+            #else
             observation.invalidateValue(at: valueID)
+            observation.invalidateValue(at: dictionaryID)
+            #endif
         }
-        #else
-        observation.invalidateValue(at: valueID)
-        #endif
     }
 
     /// Removes a dictionary value for the given key and reports a change for observation.
@@ -189,16 +211,21 @@ import Foundation
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
-        var storage = getStorage(Storage.self)
-        storage[keyPath: keyPath][key] = nil
-        let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
-        #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
-        TraceContext.withSpan("Remove: \(valueID.debugDescription)", kind: .internal) {
+        withWarehouseAccess {
+            var storage = getStorage(Storage.self)
+            storage[keyPath: keyPath][key] = nil
+            let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
+            let dictionaryID = ValueID(keyPath: keyPath)
+            #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
+            TraceContext.withSpan("Remove: \(valueID.debugDescription)", kind: .internal) {
+                observation.invalidateValue(at: valueID)
+                observation.invalidateValue(at: dictionaryID)
+            }
+            #else
             observation.invalidateValue(at: valueID)
+            observation.invalidateValue(at: dictionaryID)
+            #endif
         }
-        #else
-        observation.invalidateValue(at: valueID)
-        #endif
     }
 
     // MARK: - Sync Operations

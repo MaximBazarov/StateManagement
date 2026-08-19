@@ -12,6 +12,7 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 ### Added
 
 - `SharedEnvironment.read` snapshots a Value without subscribing. A Combine object, or any caller outside a Container, can read `.shared` this way.
+- `@SMPublished` replaces `@Published` on a `StateContainer` that is also `ObservableObject`. Leftover `instance.thisValue` / `$thisValue` always use `SharedEnvironment.shared`. Watch, Computed, and Operations use the Environment they were given ([ADR 0011](docs/adr/0011-Bridging-Combine-Published-State.md)).
 - Every async Operation declares `reentrancy`. `runAll` lets overlapping Executions proceed. `firstWins` Joins the live Execution of an Identity. `newestWins` Cancels the previous live Execution and moves awaiters onto the new one. Cancel is Task cancellation plus a Sync write door ([ADR 0002](docs/adr/0002-AsyncOperation.md)).
 - `TraceContext.log(_:)` records a developer note against the current operation span. Outside a span it does nothing.
 - `TelemetryEvent.Kind.log` for the note event. It carries no duration and breaks an exhaustive switch over `Kind`, acceptable pre-1.0.

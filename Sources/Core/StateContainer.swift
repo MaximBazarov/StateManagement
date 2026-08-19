@@ -34,6 +34,9 @@ import Foundation
 /// (`\TodoContainer.done`, key: `id`). Reads return `Value?`. Each key is observed independently.
 /// - **Computed**: a ``Computed`` property derived from the others, recomputed on demand and cached.
 ///
+/// Mark leftover Combine properties with ``SMPublished``. A plain `var` on the same class stays
+/// per-instance. Only `@SMPublished` is Environment state.
+///
 /// An Atomic or Keyed Value may be backed by a ``Source`` with ``AsyncState``. That is a Bind, not a
 /// fourth shape. `$property` is the wrapper. `$property.status` is the companion Source status.
 ///

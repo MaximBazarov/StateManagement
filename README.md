@@ -34,6 +34,23 @@ CounterView()
 
 A `Computed` derives a Value, a Service reacts, and persistence and HTTP live in a Satellite behind a Source.
 
+Replace `@Published` with `@SMPublished` to keep leftover Combine call sites while the Environment owns the Value.
+
+```swift
+import Combine
+import StateManagement
+
+final class SettingsController: StateContainer, ObservableObject {
+    @SMPublished var theme = "system"
+}
+
+let leftover = SettingsController()
+leftover.theme = "dark"              // always SharedEnvironment.shared
+leftover.$theme.sink { print($0) }   // Publisher<Value, Never>, not Published.Publisher
+```
+
+`@Watch` and Operations use the Environment they were given. Leftover Combine cannot. Tests that go through `instance.theme` use `.shared` plus `reset()`. `$` does not support `assign(to:)`.
+
 ## If you know TCA or Redux
 
 - Isolated Operations, not one reducer tree.
