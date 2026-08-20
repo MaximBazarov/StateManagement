@@ -68,6 +68,7 @@ final class SpawningSource: Source {
 
     func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void,
         in env: SourceEnvironment
     ) {
         lastEnvironment = env

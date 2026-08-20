@@ -256,11 +256,13 @@ final class ResetSource: Source {
 
     func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void,
         in env: SourceEnvironment
     ) {}
 
     func dropped<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>
+        _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void
     ) {
         droppedCount += 1
     }

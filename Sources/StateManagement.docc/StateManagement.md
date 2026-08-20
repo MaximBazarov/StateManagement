@@ -52,6 +52,8 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 
 ### Source
 
+A Source produces inbound Values. Address names the Value. Policy on ``AsyncState`` is how that Address is sourced; it is not a second Address.
+
 - ``AsyncState``
 - ``Source``
 - ``SourceStatus``
@@ -68,6 +70,7 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 ### Previews
 
 - ``SharedEnvironment/seeded(_:)``
+- ``SharedEnvironment/seed(_:)``
 - ``Write``
 - ``SeedOperationsBuilder``
 

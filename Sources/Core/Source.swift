@@ -45,40 +45,57 @@ extension SourceStatus: Equatable where Failure: Equatable {
     }
 }
 
-/// An inbound producer. The Environment owns one instance per type. Each call takes an Address.
+/// An inbound producer. The Environment owns one instance per type.
 ///
-/// Bind lasts until the Container drops. `provide` is synchronous. Nested `deliver` is a nested Sync operation.
+/// ``provide`` and ``dropped`` take an Address and a Policy value. Address names the Value. Policy is
+/// how that Address is sourced — a per-Address value stored on ``AsyncState``, not a second Address.
+///
+/// The sourced Address stays live until the Container drops. `provide` is synchronous. Nested
+/// `deliver` is a nested Sync operation.
 @MainActor
 public protocol Source: AnyObject {
     /// Failure type for `$property.status`. Use `Never` if this Source cannot fail.
     associatedtype Failure: Error
+    /// Per-Address value stored on ``AsyncState`` and passed to ``provide`` and ``dropped``.
+    ///
+    /// Default `Void` keeps type-only `@AsyncState(SomeSource.self)` for mocks. A non-Void Policy
+    /// requires a Policy value at the property wrapper.
+    associatedtype Policy: Sendable = Void
     /// Creates the one instance the Environment owns for this type.
     init()
-    /// Policy for an external update. Required. No default.
+    /// How this Source applies an external update. Required. No default.
     var sourceUpdate: SourceUpdate { get }
 
     /// Pull for one Atomic Address. Synchronous. Nested `deliver` is nested `perform`.
+    /// `policy` is the value stored on ``AsyncState`` for this Address.
     func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy: Policy,
         in env: SourceEnvironment
     )
 
     /// Pull for one Keyed Address. Synchronous. Nested `deliver` is nested `perform`.
+    /// `policy` is the value stored on ``AsyncState`` for this Address.
     func provide<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,
+        policy: Policy,
         in env: SourceEnvironment
     )
 
-    /// Bind died because this Address's Container dropped. Default is empty.
+    /// The sourced Address died because this Address's Container dropped. Default is empty.
+    /// `policy` is the same value ``provide`` received.
     func dropped<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>
+        _ keyPath: KeyPath<Storage, Value>,
+        policy: Policy
     )
 
-    /// Bind died because this keyed Address's Container dropped. Default is empty.
+    /// The sourced Address died because this keyed Address's Container dropped. Default is empty.
+    /// `policy` is the same value ``provide`` received.
     func dropped<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
-        key: Key
+        key: Key,
+        policy: Policy
     )
 }
 
@@ -86,6 +103,7 @@ extension Source {
     /// Default so a Keyed-only Source can omit the Atomic overload.
     public func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy: Policy,
         in env: SourceEnvironment
     ) {}
 
@@ -93,17 +111,20 @@ extension Source {
     public func provide<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,
+        policy: Policy,
         in env: SourceEnvironment
     ) {}
 
     /// Default so a Keyed-only Source can omit the Atomic overload.
     public func dropped<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>
+        _ keyPath: KeyPath<Storage, Value>,
+        policy: Policy
     ) {}
 
     /// Default so an Atomic-only Source can omit the Keyed overload.
     public func dropped<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
-        key: Key
+        key: Key,
+        policy: Policy
     ) {}
 }

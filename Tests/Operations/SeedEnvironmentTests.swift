@@ -101,5 +101,38 @@ struct SeedEnvironmentTests {
         #expect(env.getValue(keyPath: \SeedTestState.counter) == 7)
         #expect(env.getValue(keyPath: \SeedTestState.items, key: "z") == 9)
     }
+
+    @Test("seed applies the batch to an existing Environment")
+    func seedAppliesToExisting() {
+        let env = SharedEnvironment()
+        env.seed {
+            Write(\SeedTestState.counter, 3)
+            Write(\SeedTestState.label, "hi")
+        }
+
+        #expect(env.getValue(keyPath: \SeedTestState.counter) == 3)
+        #expect(env.getValue(keyPath: \SeedTestState.label) == "hi")
+    }
+
+    @Test("seed notifies once for multiple Writes")
+    func seedNotifiesOnce() {
+        let env = SharedEnvironment()
+        let probe = ValueObserverProbe.watch(\SeedTestState.counter, in: env)
+
+        env.seed {
+            Write(\SeedTestState.counter, 1)
+            Write(\SeedTestState.label, "x")
+        }
+
+        #expect(probe.updates == 1)
+        #expect(probe.lastValue == 1)
+    }
+
+    @Test("empty seed leaves the Environment unchanged")
+    func emptySeedIsNoop() {
+        let env = SharedEnvironment()
+        env.seed {}
+        #expect(env.getValue(keyPath: \SeedTestState.counter) == 0)
+    }
 }
 #endif

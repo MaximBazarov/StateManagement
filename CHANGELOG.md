@@ -2,6 +2,16 @@
 
 All notable changes to StateManagement are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0, expect breaking changes between minor versions.
 
+## [0.9.2] - 2026-08-20
+
+### Added
+
+- DEBUG `SharedEnvironment.seed { }` applies a Seed batch to an existing Environment. `seeded { }` stays the factory. `SeedBatch` stays internal.
+
+### Changed
+
+- `Source.provide` and `Source.dropped` take a Policy value stored on `@AsyncState`. Address still names the Value. Type-only `@AsyncState(SomeSource.self)` remains only when `Policy == Void`. May break `provide`. No shim.
+
 ## [0.9.1] - 2026-08-20
 
 ### Fixed

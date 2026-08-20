@@ -14,7 +14,7 @@
 
 import Foundation
 
-/// Marks `[Key: Output]` so keyed Bind can call `Source.provide` with the entry key.
+/// Marks `[Key: Output]` so a keyed sourced Address can call `Source.provide` with the entry key.
 fileprivate protocol AsyncStateDictionary {
     associatedtype DictKey: Hashable
     associatedtype DictOutput
@@ -44,12 +44,14 @@ protocol AsyncStateHandle: AnyObject {
 
 /// Declares that an Atomic or Keyed Value is backed by a Source. `$property` is this wrapper, not a Value.
 ///
-/// Companion Source status is `$property.status`. Bind on first read of either Address, or `preheat`.
+/// Companion Source status is `$property.status`. First read of either Address, or `preheat`, calls
+/// ``Source/provide(_:policy:in:)``. Policy is stored here and passed into `provide` and `dropped`.
 @propertyWrapper
 @MainActor
 public final class AsyncState<S: Source, Value, Status> {
     var storage: Value
     let seed: Value
+    let policy: S.Policy
     var statusStorage: Status
     let isKeyed: Bool
 
@@ -82,12 +84,27 @@ public final class AsyncState<S: Source, Value, Status> {
         set { storage = newValue }
     }
 
-    /// Atomic sourced Value. Status starts `.pending`.
+    /// Atomic sourced Value. Status starts `.pending`. Type-only; `Policy` must be `Void`.
     @_disfavoredOverload
-    public init(wrappedValue: Value, _: S.Type)
+    public convenience init(wrappedValue: Value, _: S.Type)
+        where Status == SourceStatus<S.Failure>, S.Policy == Void {
+        self.init(wrappedValue: wrappedValue, policy: ())
+    }
+
+    /// Atomic sourced Value. Status starts `.pending`. Passes `policy` to `provide` and `dropped`.
+    public convenience init(wrappedValue: Value, _ policy: S.Policy)
+        where Status == SourceStatus<S.Failure> {
+        self.init(wrappedValue: wrappedValue, policy: policy)
+    }
+
+    /// Atomic sourced Value. Status starts `.pending`. Passes `policy` to `provide` and `dropped`.
+    /// App call site is ``init(wrappedValue:_:)``.
+    @_disfavoredOverload
+    public init(wrappedValue: Value, policy: S.Policy)
         where Status == SourceStatus<S.Failure> {
         self.storage = wrappedValue
         self.seed = wrappedValue
+        self.policy = policy
         self.statusStorage = .pending
         self.isKeyed = false
         self.deliverWriter = { [weak self] value, _ in
@@ -101,11 +118,28 @@ public final class AsyncState<S: Source, Value, Status> {
         }
     }
 
-    /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on Bind.
-    public init<Key: Hashable, Output>(wrappedValue: [Key: Output], _: S.Type)
+    /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on first read.
+    /// Type-only; `Policy` must be `Void`.
+    public convenience init<Key: Hashable, Output>(wrappedValue: [Key: Output], _: S.Type)
+        where Value == [Key: Output], Status == [Key: SourceStatus<S.Failure>], S.Policy == Void {
+        self.init(wrappedValue: wrappedValue, policy: ())
+    }
+
+    /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on first read.
+    /// Passes `policy` to `provide` and `dropped`.
+    public convenience init<Key: Hashable, Output>(wrappedValue: [Key: Output], _ policy: S.Policy)
+        where Value == [Key: Output], Status == [Key: SourceStatus<S.Failure>] {
+        self.init(wrappedValue: wrappedValue, policy: policy)
+    }
+
+    /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on first read.
+    /// Passes `policy` to `provide` and `dropped`. App call site is ``init(wrappedValue:_:)``.
+    @_disfavoredOverload
+    public init<Key: Hashable, Output>(wrappedValue: [Key: Output], policy: S.Policy)
         where Value == [Key: Output], Status == [Key: SourceStatus<S.Failure>] {
         self.storage = wrappedValue
         self.seed = wrappedValue
+        self.policy = policy
         self.statusStorage = [:]
         self.isKeyed = true
         self.deliverWriter = { [weak self] value, key in
@@ -155,7 +189,7 @@ public final class AsyncState<S: Source, Value, Status> {
         }
     }
 
-    /// Reads `$property` through the enclosing Container. Status-first Bind still needs a writable Address for `provide`.
+    /// Reads `$property` through the enclosing Container. Status-first read still needs a writable Address for `provide`.
     public static subscript<Storage: StateContainer>(
         _enclosingInstance instance: Storage,
         projected projectedKeyPath: KeyPath<Storage, AsyncState<S, Value, Status>>,
@@ -178,6 +212,7 @@ public final class AsyncState<S: Source, Value, Status> {
     private func installProvideOpener<Storage: StateContainer>(
         sourced: KeyPath<Storage, Value>
     ) {
+        let policy = self.policy
         provideOpener = { source, env, key in
             if let key, let dictType = Value.self as? any AsyncStateDictionary.Type {
                 Self.provideKeyedDictionary(
@@ -185,11 +220,12 @@ public final class AsyncState<S: Source, Value, Status> {
                     source: source,
                     env: env,
                     sourced: sourced,
-                    key: key
+                    key: key,
+                    policy: policy
                 )
                 return
             }
-            source.provide(sourced, in: env)
+            source.provide(sourced, policy: policy, in: env)
         }
         droppedOpener = { source, key in
             if let key, let dictType = Value.self as? any AsyncStateDictionary.Type {
@@ -197,11 +233,12 @@ public final class AsyncState<S: Source, Value, Status> {
                     dictType,
                     source: source,
                     sourced: sourced,
-                    key: key
+                    key: key,
+                    policy: policy
                 )
                 return
             }
-            source.dropped(sourced)
+            source.dropped(sourced, policy: policy)
         }
     }
 
@@ -210,14 +247,15 @@ public final class AsyncState<S: Source, Value, Status> {
         _ type: D.Type,
         source: S,
         sourced: KeyPath<Storage, Value>,
-        key: AnyHashable
+        key: AnyHashable,
+        policy: S.Policy
     ) {
         guard let typedKey = key.base as? D.DictKey else { return }
         guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
-            source.dropped(sourced)
+            source.dropped(sourced, policy: policy)
             return
         }
-        source.dropped(dictPath, key: typedKey)
+        source.dropped(dictPath, key: typedKey, policy: policy)
     }
 
     /// Opens `Value` as `[Key: Output]` so keyed `provide` is not lost to overload resolution.
@@ -226,14 +264,15 @@ public final class AsyncState<S: Source, Value, Status> {
         source: S,
         env: SourceEnvironment,
         sourced: KeyPath<Storage, Value>,
-        key: AnyHashable
+        key: AnyHashable,
+        policy: S.Policy
     ) {
         guard let typedKey = key.base as? D.DictKey else { return }
         guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
-            source.provide(sourced, in: env)
+            source.provide(sourced, policy: policy, in: env)
             return
         }
-        source.provide(dictPath, key: typedKey, in: env)
+        source.provide(dictPath, key: typedKey, policy: policy, in: env)
     }
 
     private func writeAtomicDeliver(_ value: Any) {

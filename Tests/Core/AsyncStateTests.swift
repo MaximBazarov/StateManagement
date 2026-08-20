@@ -39,6 +39,7 @@ final class MockSource: Source {
 
     func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void,
         in env: SourceEnvironment
     ) {
         provideCount += 1
@@ -48,6 +49,7 @@ final class MockSource: Source {
     func provide<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,
+        policy _: Void,
         in env: SourceEnvironment
     ) {
         keyedProvideCount += 1
@@ -65,6 +67,7 @@ final class DeliveringSource: Source {
 
     func provide<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void,
         in env: SourceEnvironment
     ) {
         guard let path = keyPath as? WritableKeyPath<Storage, Value> else { return }
@@ -355,5 +358,125 @@ struct AsyncStateKeyedTests {
 
         #expect(env.read(\AsyncBox.theme) == "dark")
         #expect(env.read(\AsyncBox.title) == "Hello")
+    }
+}
+
+struct ProbePolicy: Sendable, Equatable {
+    let id: String
+}
+
+@MainActor
+final class PolicySource: Source {
+    typealias Failure = Never
+    typealias Policy = ProbePolicy
+
+    let sourceUpdate = SourceUpdate.write
+    private(set) var lastProvidePolicy: ProbePolicy?
+    private(set) var lastDroppedPolicy: ProbePolicy?
+    private(set) var lastKeyedProvidePolicy: ProbePolicy?
+    private(set) var lastKeyedDroppedPolicy: ProbePolicy?
+
+    init() {}
+
+    func provide<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>,
+        policy: ProbePolicy,
+        in env: SourceEnvironment
+    ) {
+        lastProvidePolicy = policy
+    }
+
+    func provide<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key,
+        policy: ProbePolicy,
+        in env: SourceEnvironment
+    ) {
+        lastKeyedProvidePolicy = policy
+    }
+
+    func dropped<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>,
+        policy: ProbePolicy
+    ) {
+        lastDroppedPolicy = policy
+    }
+
+    func dropped<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key,
+        policy: ProbePolicy
+    ) {
+        lastKeyedDroppedPolicy = policy
+    }
+}
+
+extension AsyncState where S == PolicySource {
+    convenience init(wrappedValue: Value, _ policy: ProbePolicy)
+        where Status == SourceStatus<PolicySource.Failure> {
+        self.init(wrappedValue: wrappedValue, policy: policy)
+    }
+
+    convenience init<Key: Hashable, Output>(
+        wrappedValue: [Key: Output],
+        _ policy: ProbePolicy
+    ) where Value == [Key: Output], Status == [Key: SourceStatus<PolicySource.Failure>] {
+        self.init(wrappedValue: wrappedValue, policy: policy)
+    }
+}
+
+final class PolicyBox: StateContainer {
+    @AsyncState(ProbePolicy(id: "atomic")) var theme: String = "system"
+}
+
+final class PolicyKeyedBox: StateContainer {
+    @AsyncState(ProbePolicy(id: "keyed")) var flags: [String: Bool] = [:]
+}
+
+struct ResetPolicyBox: SyncOperation {
+    func perform(in env: SyncOperationEnvironment) {
+        env.reset(PolicyBox.self)
+    }
+}
+
+struct ResetPolicyKeyedBox: SyncOperation {
+    func perform(in env: SyncOperationEnvironment) {
+        env.reset(PolicyKeyedBox.self)
+    }
+}
+
+@Suite @MainActor
+struct AsyncStatePolicyTests {
+
+    @Test("A non-Void Policy reaches Atomic provide and dropped")
+    func atomicPolicyReachesProvideAndDropped() {
+        let env = SharedEnvironment()
+        let source = PolicySource()
+        env.install(source)
+
+        env.preheat(\PolicyBox.theme)
+
+        #expect(source.lastProvidePolicy == ProbePolicy(id: "atomic"))
+        #expect(source.lastDroppedPolicy == nil)
+
+        env.perform(ResetPolicyBox())
+
+        #expect(source.lastDroppedPolicy == ProbePolicy(id: "atomic"))
+    }
+
+    @Test("A non-Void Policy reaches Keyed provide and dropped")
+    func keyedPolicyReachesProvideAndDropped() {
+        let env = SharedEnvironment()
+        let source = PolicySource()
+        env.install(source)
+
+        env.preheat(\PolicyKeyedBox.flags, key: "a")
+
+        #expect(source.lastKeyedProvidePolicy == ProbePolicy(id: "keyed"))
+        #expect(source.lastKeyedDroppedPolicy == nil)
+
+        env.perform(ResetPolicyKeyedBox())
+
+        #expect(source.lastKeyedDroppedPolicy == ProbePolicy(id: "keyed"))
     }
 }

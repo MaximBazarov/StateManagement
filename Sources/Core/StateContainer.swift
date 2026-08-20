@@ -37,8 +37,9 @@ import Foundation
 /// Mark leftover Combine properties with ``SMPublished``. A plain `var` on the same class stays
 /// per-instance. Only `@SMPublished` is Environment state.
 ///
-/// An Atomic or Keyed Value may be backed by a ``Source`` with ``AsyncState``. That is a Bind, not a
-/// fourth shape. `$property` is the wrapper. `$property.status` is the companion Source status.
+/// An Atomic or Keyed Value may be backed by a ``Source`` with ``AsyncState``. That is sourced State,
+/// not a fourth shape. `$property` is the wrapper. `$property.status` is the companion Source status.
+/// Address names the Value. Policy on ``AsyncState`` is how that Address is sourced, not a second Address.
 ///
 /// ```swift
 /// final class TodoContainer: StateContainer {

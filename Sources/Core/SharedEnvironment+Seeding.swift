@@ -24,10 +24,21 @@ extension SharedEnvironment {
         @SeedOperationsBuilder _ operations: () -> [any SyncOperation]
     ) -> SharedEnvironment {
         let env = SharedEnvironment()
-        let ops = operations()
-        guard !ops.isEmpty else { return env }
-        env.perform(SeedBatch(operations: ops))
+        env.seed(operations)
         return env
+    }
+
+    /// Applies the builder’s operations to this Environment in one ``perform(_:file:line:)``
+    /// (single notify). Empty builders skip `perform`.
+    ///
+    /// DEBUG only. Use for previews and tests. ``seeded(_:)`` is the factory that creates a
+    /// fresh Environment and calls this.
+    public func seed(
+        @SeedOperationsBuilder _ operations: () -> [any SyncOperation]
+    ) {
+        let ops = operations()
+        guard !ops.isEmpty else { return }
+        perform(SeedBatch(operations: ops))
     }
 }
 #endif

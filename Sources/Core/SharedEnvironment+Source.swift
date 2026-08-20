@@ -54,14 +54,14 @@ extension SharedEnvironment {
         return created
     }
 
-    /// Binds a sourced Address without a Watch. Same Bind as first read.
+    /// Calls `provide` for a sourced Address without a Watch. Same as first read.
     public func preheat<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) {
         _ = read(keyPath)
     }
 
-    /// Binds a keyed sourced Address without a Watch. Same Bind as first read.
+    /// Calls `provide` for a keyed sourced Address without a Watch. Same as first read.
     public func preheat<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
