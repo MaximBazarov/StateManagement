@@ -2,6 +2,12 @@
 
 All notable changes to StateManagement are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0, expect breaking changes between minor versions.
 
+## [0.9.1] - 2026-08-20
+
+### Fixed
+
+- `Watch` and `@Perform` no longer send Combine `objectWillChange` during a SwiftUI view update. Invalidation hops to the next main run-loop turn in common modes. `notifyAll()` stays synchronous.
+
 ## [0.9.0] - 2026-08-19
 
 First tagged pre-release. Experimental: the public API may still break before `1.0.0`. In-repo DocC only, no Swift Package Index docs until `1.0.0`.
