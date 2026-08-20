@@ -277,7 +277,7 @@ struct ResetSourced: SyncOperation {
 @Suite @MainActor
 struct ResetSourceTests {
 
-    @Test("reset(_:) calls dropped on the bound Address and keeps the Source")
+    @Test("reset(_:) calls dropped on the sourced Address and keeps the Source")
     func targetedResetCallsDropped() {
         let env = SharedEnvironment()
         let source = ResetSource()

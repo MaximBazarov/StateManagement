@@ -88,10 +88,10 @@ final class DeliveringBox: StateContainer {
 }
 
 @Suite @MainActor
-struct AsyncStateBindTests {
+struct AsyncStateSourceTests {
 
-    @Test("First Watch of the sourced Value binds")
-    func firstWatchOfValueBinds() {
+    @Test("First Watch of the sourced Value calls provide")
+    func firstWatchOfValueProvides() {
         let env = SharedEnvironment()
         let source = MockSource()
         env.install(source)
@@ -101,8 +101,8 @@ struct AsyncStateBindTests {
         #expect(source.provideCount == 1)
     }
 
-    @Test("First Watch of status binds")
-    func firstWatchOfStatusBinds() {
+    @Test("First Watch of status calls provide")
+    func firstWatchOfStatusProvides() {
         let env = SharedEnvironment()
         let source = MockSource()
         env.install(source)
@@ -125,8 +125,8 @@ struct AsyncStateBindTests {
         status.expect(value: .settled)
     }
 
-    @Test("Preheat binds with no Watch")
-    func preheatBindsWithNoWatch() {
+    @Test("Preheat calls provide with no Watch")
+    func preheatProvidesWithNoWatch() {
         let env = SharedEnvironment()
         let source = MockSource()
         env.install(source)
@@ -136,8 +136,8 @@ struct AsyncStateBindTests {
         #expect(source.provideCount == 1)
     }
 
-    @Test("A second Watch of the same Address does not bind again")
-    func secondWatchDoesNotBindAgain() {
+    @Test("A second Watch of the same Address does not provide again")
+    func secondWatchDoesNotProvideAgain() {
         let env = SharedEnvironment()
         let source = MockSource()
         env.install(source)
@@ -220,8 +220,8 @@ struct AsyncStateDeliverTests {
         status.expect(value: .settled)
     }
 
-    @Test("Clear does not unbind")
-    func clearDoesNotUnbind() {
+    @Test("Clear does not call dropped")
+    func clearDoesNotCallDropped() {
         let env = SharedEnvironment()
         let source = MockSource()
         env.install(source)

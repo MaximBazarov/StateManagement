@@ -44,7 +44,7 @@ import Foundation
     private var liveExecutions: [UUID: Execution] = [:]
 
     var sourceWarehouse: [ObjectIdentifier: any Source] = [:]
-    var sourceBinds: [ValueID: SourceBinding] = [:]
+    var sourceRecords: [ValueID: SourceRecord] = [:]
     var pendingHandle: (any AsyncStateHandle)?
 
     private struct ExecutionGroup: Hashable {
@@ -111,7 +111,7 @@ import Foundation
 
     // MARK: - Atomic
 
-    /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address binds.
+    /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address calls `provide`.
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
@@ -155,7 +155,7 @@ import Foundation
 
     // MARK: - Dictionary
 
-    /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address binds.
+    /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address calls `provide`.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
@@ -574,7 +574,7 @@ import Foundation
     func resetAll() {
         cancelAllExecutions()
         dropAllServices()
-        dropAllBinds()
+        dropAllRecords()
         sourceWarehouse.removeAll()
         observation.invalidateSubscribed()
         warehouse.removeAll()
@@ -582,7 +582,7 @@ import Foundation
 
     func resetContainer<Storage: StateContainer>(_ type: Storage.Type) {
         cancelAllExecutions()
-        dropBinds(in: type)
+        dropRecords(in: type)
         observation.invalidateSubscribed(in: type)
         warehouse.removeValue(forKey: StorageID(type))
     }

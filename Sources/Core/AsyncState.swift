@@ -97,8 +97,8 @@ public final class AsyncState<S: Source, Value, Status> {
         self.init(wrappedValue: wrappedValue, policy: policy)
     }
 
-    /// Atomic sourced Value. Status starts `.pending`. Passes `policy` to `provide` and `dropped`.
-    /// App call site is ``init(wrappedValue:_:)``.
+    /// Designated init. App call site is unlabeled ``init(wrappedValue:_:)``.
+    /// A Satellite pins `S` by forwarding here; `S.Policy` does not reverse-infer `S`.
     @_disfavoredOverload
     public init(wrappedValue: Value, policy: S.Policy)
         where Status == SourceStatus<S.Failure> {
@@ -132,8 +132,8 @@ public final class AsyncState<S: Source, Value, Status> {
         self.init(wrappedValue: wrappedValue, policy: policy)
     }
 
-    /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on first read.
-    /// Passes `policy` to `provide` and `dropped`. App call site is ``init(wrappedValue:_:)``.
+    /// Designated keyed init. App call site is unlabeled ``init(wrappedValue:_:)``.
+    /// A Satellite pins `S` by forwarding here; `S.Policy` does not reverse-infer `S`.
     @_disfavoredOverload
     public init<Key: Hashable, Output>(wrappedValue: [Key: Output], policy: S.Policy)
         where Value == [Key: Output], Status == [Key: SourceStatus<S.Failure>] {

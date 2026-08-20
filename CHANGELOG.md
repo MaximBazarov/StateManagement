@@ -11,6 +11,7 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 ### Changed
 
 - `Source.provide` and `Source.dropped` take a Policy value stored on `@AsyncState`. Address still names the Value. Type-only `@AsyncState(SomeSource.self)` remains only when `Policy == Void`. May break `provide`. No shim.
+- Labeled `AsyncState.init(wrappedValue:policy:)` is the designated init (`@_disfavoredOverload`). The app call site is unlabeled. A Satellite pins `S` by forwarding to it.
 
 ## [0.9.1] - 2026-08-20
 

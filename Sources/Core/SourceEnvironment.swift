@@ -80,7 +80,7 @@ public final class SourceEnvironment {
         })
     }
 
-    /// Writes the seed and `.pending`, and clears dirty. Does not unbind.
+    /// Writes the seed and `.pending`, and clears dirty. Does not call `dropped`.
     public func clear<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) {
@@ -89,7 +89,7 @@ public final class SourceEnvironment {
         })
     }
 
-    /// Writes the keyed seed and `.pending`, and clears dirty. Does not unbind.
+    /// Writes the keyed seed and `.pending`, and clears dirty. Does not call `dropped`.
     public func clear<Storage: StateContainer, Key: Hashable, Value>(
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key

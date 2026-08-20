@@ -106,7 +106,7 @@ import Foundation
         environment.resetAll()
     }
 
-    /// Drops the named Container type and its Binds. Cancels every in-flight Execution.
+    /// Drops the named Container type and calls `dropped` for its sourced Addresses. Cancels every in-flight Execution.
     public func reset<Storage: StateContainer>(_ type: Storage.Type) {
         environment.resetContainer(type)
     }

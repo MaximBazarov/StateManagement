@@ -15,12 +15,12 @@
 import Foundation
 
 @MainActor
-final class SourceBinding {
+final class SourceRecord {
     let handle: any AsyncStateHandle
     var sourcedID: ValueID?
     var statusID: ValueID?
     var dirty = false
-    var bound = false
+    var didProvide = false
     let key: AnyHashable?
 
     init(handle: any AsyncStateHandle, key: AnyHashable?) {
@@ -99,15 +99,15 @@ extension SharedEnvironment {
             return
         }
         let valueID = makeValueID(keyPath: keyPath, key: key)
-        let binding = binding(for: handle, valueID: valueID, keyPath: keyPath, key: key)
+        let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: key)
         handle.seedKeyedPending(key: key)
-        if !binding.bound {
-            binding.bound = true
-            provide(binding)
+        if !record.didProvide {
+            record.didProvide = true
+            provide(record)
             return
         }
-        if binding.dirty {
-            provide(binding)
+        if record.dirty {
+            provide(record)
         }
     }
 
@@ -121,68 +121,68 @@ extension SharedEnvironment {
         return ValueID(keyPath: keyPath)
     }
 
-    private func binding<Storage: StateContainer, Value>(
+    private func record<Storage: StateContainer, Value>(
         for handle: any AsyncStateHandle,
         valueID: ValueID,
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
-    ) -> SourceBinding {
-        if let existing = sourceBinds[valueID] {
+    ) -> SourceRecord {
+        if let existing = sourceRecords[valueID] {
             classify(existing, valueID: valueID, keyPath: keyPath, handle: handle)
             return existing
         }
-        if let existing = uniqueBinds.first(where: {
+        if let existing = uniqueRecords.first(where: {
             ObjectIdentifier($0.handle) == ObjectIdentifier(handle) && $0.key == key
         }) {
-            sourceBinds[valueID] = existing
+            sourceRecords[valueID] = existing
             classify(existing, valueID: valueID, keyPath: keyPath, handle: handle)
             return existing
         }
-        let created = SourceBinding(handle: handle, key: key)
-        sourceBinds[valueID] = created
+        let created = SourceRecord(handle: handle, key: key)
+        sourceRecords[valueID] = created
         classify(created, valueID: valueID, keyPath: keyPath, handle: handle)
         return created
     }
 
-    private var uniqueBinds: [SourceBinding] {
-        var seen: [ObjectIdentifier: SourceBinding] = [:]
-        for bind in sourceBinds.values {
-            seen[ObjectIdentifier(bind)] = bind
+    private var uniqueRecords: [SourceRecord] {
+        var seen: [ObjectIdentifier: SourceRecord] = [:]
+        for record in sourceRecords.values {
+            seen[ObjectIdentifier(record)] = record
         }
         return Array(seen.values)
     }
 
     private func classify<Storage: StateContainer, Value>(
-        _ binding: SourceBinding,
+        _ record: SourceRecord,
         valueID: ValueID,
         keyPath: KeyPath<Storage, Value>,
         handle: any AsyncStateHandle
     ) {
         if handle.statusKeyPath == keyPath {
-            binding.statusID = valueID
+            record.statusID = valueID
         }
         if handle.sourcedKeyPath == keyPath {
-            binding.sourcedID = valueID
+            record.sourcedID = valueID
         }
-        if binding.sourcedID == nil, binding.statusID == nil {
-            binding.sourcedID = valueID
+        if record.sourcedID == nil, record.statusID == nil {
+            record.sourcedID = valueID
         }
     }
 
-    private func provide(_ binding: SourceBinding) {
-        let source = binding.handle.resolveSource(in: self)
+    private func provide(_ record: SourceRecord) {
+        let source = record.handle.resolveSource(in: self)
         let env = SourceEnvironment(self)
-        binding.handle.callProvide(source, env, key: binding.key)
+        record.handle.callProvide(source, env, key: record.key)
     }
 
     func applySourceDeliver<Storage: StateContainer, Value>(
         _ value: Value,
         keyPath: KeyPath<Storage, Value>
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: nil)
-        binding?.handle.writeDeliver(value, key: nil)
-        binding?.dirty = false
-        notifySource(binding)
+        let record = recordMatching(keyPath: keyPath, key: nil)
+        record?.handle.writeDeliver(value, key: nil)
+        record?.dirty = false
+        notifySource(record)
     }
 
     func applySourceKeyedDeliver<Storage: StateContainer, Key: Hashable, Value>(
@@ -190,20 +190,20 @@ extension SharedEnvironment {
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: key)
-        binding?.handle.writeDeliver(value, key: key)
-        binding?.dirty = false
-        notifySource(binding)
+        let record = recordMatching(keyPath: keyPath, key: key)
+        record?.handle.writeDeliver(value, key: key)
+        record?.dirty = false
+        notifySource(record)
     }
 
     func applySourceFail<Storage: StateContainer, Value>(
         _ error: any Error,
         keyPath: KeyPath<Storage, Value>
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: nil)
-        binding?.handle.writeFail(error, key: nil)
-        binding?.dirty = false
-        if let statusID = binding?.statusID {
+        let record = recordMatching(keyPath: keyPath, key: nil)
+        record?.handle.writeFail(error, key: nil)
+        record?.dirty = false
+        if let statusID = record?.statusID {
             observation.invalidateValue(at: statusID)
         }
     }
@@ -213,10 +213,10 @@ extension SharedEnvironment {
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: key)
-        binding?.handle.writeFail(error, key: key)
-        binding?.dirty = false
-        if let statusID = binding?.statusID {
+        let record = recordMatching(keyPath: keyPath, key: key)
+        record?.handle.writeFail(error, key: key)
+        record?.dirty = false
+        if let statusID = record?.statusID {
             observation.invalidateValue(at: statusID)
         }
     }
@@ -224,28 +224,28 @@ extension SharedEnvironment {
     func applySourceClear<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: nil)
-        binding?.handle.writeClear(key: nil)
-        binding?.dirty = false
-        notifySource(binding)
+        let record = recordMatching(keyPath: keyPath, key: nil)
+        record?.handle.writeClear(key: nil)
+        record?.dirty = false
+        notifySource(record)
     }
 
     func applySourceKeyedClear<Storage: StateContainer, Key: Hashable, Value>(
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: key)
-        binding?.handle.writeClear(key: key)
-        binding?.dirty = false
-        notifySource(binding)
+        let record = recordMatching(keyPath: keyPath, key: key)
+        record?.handle.writeClear(key: key)
+        record?.dirty = false
+        notifySource(record)
     }
 
     func applySourceInvalidate<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: nil)
-        binding?.dirty = true
-        if let sourcedID = binding?.sourcedID {
+        let record = recordMatching(keyPath: keyPath, key: nil)
+        record?.dirty = true
+        if let sourcedID = record?.sourcedID {
             observation.invalidateValue(at: sourcedID)
         }
     }
@@ -254,34 +254,34 @@ extension SharedEnvironment {
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
-        let binding = bindMatching(keyPath: keyPath, key: key)
-        binding?.dirty = true
-        if let sourcedID = binding?.sourcedID {
+        let record = recordMatching(keyPath: keyPath, key: key)
+        record?.dirty = true
+        if let sourcedID = record?.sourcedID {
             observation.invalidateValue(at: sourcedID)
         }
     }
 
-    private func bindMatching<Storage: StateContainer, Value>(
+    private func recordMatching<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
-    ) -> SourceBinding? {
+    ) -> SourceRecord? {
         let id = makeValueID(keyPath: keyPath, key: key)
-        if let binding = sourceBinds[id] {
-            return binding
+        if let record = sourceRecords[id] {
+            return record
         }
-        if let match = uniqueBinds.first(where: { bind in
-            bind.key == key && Self.addressMatches(bind.handle, keyPath: keyPath)
+        if let match = uniqueRecords.first(where: { record in
+            record.key == key && Self.addressMatches(record.handle, keyPath: keyPath)
         }) {
-            sourceBinds[id] = match
+            sourceRecords[id] = match
             match.sourcedID = id
             return match
         }
         _ = getValue(keyPath: keyPath)
-        if let binding = sourceBinds[id] {
-            return binding
+        if let record = sourceRecords[id] {
+            return record
         }
-        return uniqueBinds.first { bind in
-            bind.key == key && Self.addressMatches(bind.handle, keyPath: keyPath)
+        return uniqueRecords.first { record in
+            record.key == key && Self.addressMatches(record.handle, keyPath: keyPath)
         }
     }
 
@@ -289,50 +289,50 @@ extension SharedEnvironment {
         handle.sourcedKeyPath == keyPath || handle.storageValueKeyPath == keyPath
     }
 
-    private func notifySource(_ binding: SourceBinding?) {
-        guard let binding else { return }
-        if let sourcedID = binding.sourcedID {
+    private func notifySource(_ record: SourceRecord?) {
+        guard let record else { return }
+        if let sourcedID = record.sourcedID {
             observation.invalidateValue(at: sourcedID)
         }
-        if let statusID = binding.statusID {
+        if let statusID = record.statusID {
             observation.invalidateValue(at: statusID)
         }
     }
 
-    func dropAllBinds() {
-        for bind in uniqueBinds {
-            endBind(bind)
+    func dropAllRecords() {
+        for record in uniqueRecords {
+            endRecord(record)
         }
-        sourceBinds.removeAll()
+        sourceRecords.removeAll()
     }
 
-    func dropBinds<Storage: StateContainer>(in type: Storage.Type) {
-        var kept: [ValueID: SourceBinding] = [:]
+    func dropRecords<Storage: StateContainer>(in type: Storage.Type) {
+        var kept: [ValueID: SourceRecord] = [:]
         var ended: Set<ObjectIdentifier> = []
-        for (id, bind) in sourceBinds {
-            if bindBelongs(bind, to: type) {
-                let token = ObjectIdentifier(bind)
+        for (id, record) in sourceRecords {
+            if recordBelongs(record, to: type) {
+                let token = ObjectIdentifier(record)
                 if ended.insert(token).inserted {
-                    endBind(bind)
+                    endRecord(record)
                 }
             } else {
-                kept[id] = bind
+                kept[id] = record
             }
         }
-        sourceBinds = kept
+        sourceRecords = kept
     }
 
-    private func bindBelongs<Storage: StateContainer>(
-        _ bind: SourceBinding,
+    private func recordBelongs<Storage: StateContainer>(
+        _ record: SourceRecord,
         to type: Storage.Type
     ) -> Bool {
-        bind.handle.sourcedKeyPath is PartialKeyPath<Storage>
-            || bind.handle.statusKeyPath is PartialKeyPath<Storage>
-            || bind.handle.storageValueKeyPath is PartialKeyPath<Storage>
+        record.handle.sourcedKeyPath is PartialKeyPath<Storage>
+            || record.handle.statusKeyPath is PartialKeyPath<Storage>
+            || record.handle.storageValueKeyPath is PartialKeyPath<Storage>
     }
 
-    private func endBind(_ bind: SourceBinding) {
-        let source = bind.handle.resolveSource(in: self)
-        bind.handle.callDropped(source, key: bind.key)
+    private func endRecord(_ record: SourceRecord) {
+        let source = record.handle.resolveSource(in: self)
+        record.handle.callDropped(source, key: record.key)
     }
 }
