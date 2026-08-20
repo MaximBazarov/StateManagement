@@ -23,6 +23,22 @@ import Combine
 /// `Watch.wired(_:)` forwards the reader's `onChange` to `objectWillChange`.
 extension SubscribingValueReader: ObservableObject {}
 
+extension ObservableObjectPublisher {
+    /// SwiftUI forbids `send()` during a view update. Binding `set` and
+    /// notify-from-body are view updates. Hop to the next main run-loop
+    /// turn, including tracking (scroll / press).
+    ///
+    /// `RunLoop.perform` takes `@Sendable`. Combine's publisher is not
+    /// Sendable. This hop is MainActor to the main run loop; the value
+    /// does not leave that thread.
+    func sendAfterViewUpdate() {
+        nonisolated(unsafe) let publisher = self
+        RunLoop.main.perform(inModes: [.common]) {
+            publisher.send()
+        }
+    }
+}
+
 /// A SwiftUI property wrapper that observes a single piece of state — an atomic
 /// value, one dictionary key, or a computed value — and invalidates the view's
 /// body when that state changes.
@@ -97,14 +113,10 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         // poking `objectWillChange` so a state change re-renders the view. Weak
         // capture: the reader owns this closure, so a strong ref would cycle.
         reader.onChange = { [weak reader] in
-            reader?.objectWillChange.send()
+            reader?.objectWillChange.sendAfterViewUpdate()
         }
         return reader
     }
-
-
-
-
 
     // MARK: - Initialisers -
 

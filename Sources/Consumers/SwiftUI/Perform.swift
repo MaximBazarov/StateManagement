@@ -23,12 +23,12 @@ final class PerformInFlight: ObservableObject {
     var isInProgress: Bool { count > 0 }
 
     func begin() {
-        objectWillChange.send()
+        objectWillChange.sendAfterViewUpdate()
         count += 1
     }
 
     func end() {
-        objectWillChange.send()
+        objectWillChange.sendAfterViewUpdate()
         count -= 1
     }
 }

@@ -119,6 +119,28 @@ struct TestView: View {
         Text(value)
     }
 }
+
+/// Holds the `Watch.binding` so the test can `set` after the first body, the
+/// same path a SwiftUI control uses.
+@MainActor
+final class WatchBindingHolder {
+    var binding: Binding<String>?
+}
+
+@MainActor
+struct BindingWriteView: View {
+    let counter: RenderCounter
+    let holder: WatchBindingHolder
+    @Watch(\TestWatchState.value) var value
+
+    var body: some View {
+        let _ = counter.count += 1
+        let _ = holder.binding = $value.binding { newValue, env in
+            env.write(newValue, keyPath: \TestWatchState.value)
+        }
+        Text(value)
+    }
+}
 #endif
 
 @Suite
@@ -148,6 +170,32 @@ struct WatchTests {
 
         let rendered = await waitUntil { counter.count > before }
         #expect(rendered, "body did not re-evaluate after state change")
+    }
+
+    /// Binding `set` is a view update. `Watch` must still re-render after that
+    /// write once `objectWillChange` hops off the current update.
+    @Test("Watch.binding set re-evaluates body")
+    func watchBindingSetRerenders() async throws {
+        let env = SharedEnvironment()
+        let counter = RenderCounter()
+        let holder = WatchBindingHolder()
+
+        let host = HostedView.mount(
+            BindingWriteView(counter: counter, holder: holder).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        #expect(counter.count >= 1)
+        let published = await waitUntil { holder.binding != nil }
+        #expect(published, "body did not publish a Binding")
+
+        let before = counter.count
+        holder.binding?.wrappedValue = "from-binding"
+        host.relayout()
+
+        let rendered = await waitUntil { counter.count > before }
+        #expect(rendered, "body did not re-evaluate after Watch.binding set")
+        #expect(holder.binding?.wrappedValue == "from-binding")
     }
     #endif
 
