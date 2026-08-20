@@ -101,6 +101,23 @@ struct AsyncStateSourceTests {
         #expect(source.provideCount == 1)
     }
 
+    @Test("SourceEnvironment.environmentID is the Environment the Source is providing into")
+    func environmentIDMatchesTheEnvironment() {
+        let envA = SharedEnvironment()
+        let envB = SharedEnvironment()
+        let sourceA = MockSource()
+        let sourceB = MockSource()
+        envA.install(sourceA)
+        envB.install(sourceB)
+
+        envA.preheat(\AsyncBox.theme)
+        envB.preheat(\AsyncBox.theme)
+
+        #expect(sourceA.lastEnvironment?.environmentID == ObjectIdentifier(envA))
+        #expect(sourceB.lastEnvironment?.environmentID == ObjectIdentifier(envB))
+        #expect(sourceA.lastEnvironment?.environmentID != sourceB.lastEnvironment?.environmentID)
+    }
+
     @Test("First Watch of status calls provide")
     func firstWatchOfStatusProvides() {
         let env = SharedEnvironment()

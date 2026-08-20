@@ -23,6 +23,14 @@ public final class SourceEnvironment {
         self.environment = environment
     }
 
+    /// Identity of the Environment this Source is providing into.
+    ///
+    /// Satellites overlay Persistence identity by this key. The Environment object stays hidden so a
+    /// Source cannot `perform` or `write`.
+    public var environmentID: ObjectIdentifier {
+        ObjectIdentifier(environment)
+    }
+
     /// Snapshots a Value. Does not subscribe.
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>

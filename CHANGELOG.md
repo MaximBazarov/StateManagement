@@ -7,6 +7,7 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 ### Added
 
 - DEBUG `SharedEnvironment.seed { }` applies a Seed batch to an existing Environment. `seeded { }` stays the factory. `SeedBatch` stays internal.
+- `SourceEnvironment.environmentID` is the Environment identity a Source is providing into. Satellites overlay Persistence identity by this key.
 
 ### Changed
 
