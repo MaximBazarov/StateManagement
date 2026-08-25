@@ -1,6 +1,6 @@
 # StateManagement
 
-Experimental. v0.9.1. The public API will break until 1.0.0.
+Experimental. v0.9.2. The public API will break until 1.0.0.
 
 StateManagement is a state library for Swift and SwiftUI. One Environment owns all State. State is sliced into Containers. You read a Value with `@Watch`. You change it only through an Operation. Observation is per Value, and per key in a dictionary. The Environment is not SwiftUI’s `@Environment`. It resolves Containers for you, in views and outside them, with no DI container.
 
@@ -32,7 +32,7 @@ CounterView()
     .sharedEnvironment(SharedEnvironment())
 ```
 
-A `Computed` derives a Value, a Service reacts, and persistence and HTTP live in a Satellite behind a Source.
+A `Computed` derives a Value, a Service reacts, and persistence and HTTP live in a Satellite behind an AsyncStrategy.
 
 Replace `@Published` with `@SMPublished` to keep leftover Combine call sites while the Environment owns the Value.
 

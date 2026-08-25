@@ -2,16 +2,18 @@
 
 All notable changes to StateManagement are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0, expect breaking changes between minor versions.
 
-## [0.9.2] - 2026-08-20
+## [0.9.2] - 2026-08-25
 
 ### Added
 
 - DEBUG `SharedEnvironment.seed { }` applies a Seed batch to an existing Environment. `seeded { }` stays the factory. `SeedBatch` stays internal.
-- `SourceEnvironment.environmentID` is the Environment identity a Source is providing into. Satellites overlay Persistence identity by this key.
+- `AsyncStrategyEnvironment.environmentID` is the Environment identity a strategy is bound to. Satellites overlay Persistence identity by this key.
+- Awaitable `read` of a `$` Address on `AsyncOperationEnvironment` and `EnvironmentService`. `refresh()` on `@AsyncState` and the `Watch` projection dirties and kicks `onRead`.
 
 ### Changed
 
-- `Source.provide` and `Source.dropped` take a Policy value stored on `@AsyncState`. Address still names the Value. Type-only `@AsyncState(SomeSource.self)` remains only when `Policy == Void`. May break `provide`. No shim.
+- `Source` is `AsyncStrategy`. `provide` / `dropped` are `onRead` / `onDrop`. Persist-out is `onWrite`. No shim.
+- `onRead`, `onWrite`, and `onDrop` take a Policy value stored on `@AsyncState`. Address still names the Value. Type-only `@AsyncState(SomeStrategy.self)` remains only when `Policy == Void`. May break `provide`. No shim.
 - Labeled `AsyncState.init(wrappedValue:policy:)` is the designated init (`@_disfavoredOverload`). The app call site is unlabeled. A Satellite pins `S` by forwarding to it.
 
 ## [0.9.1] - 2026-08-20
