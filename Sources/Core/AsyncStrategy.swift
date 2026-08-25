@@ -105,12 +105,14 @@ public protocol AsyncStrategy: AnyObject {
 }
 
 extension AsyncStrategy {
+    /// Default so a Keyed-only strategy can omit the Atomic overload.
     public func onRead<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
         policy: Policy,
         current: Value
     ) {}
 
+    /// Default so an Atomic-only strategy can omit the Keyed overload.
     public func onRead<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,
@@ -118,12 +120,14 @@ extension AsyncStrategy {
         current: Value?
     ) {}
 
+    /// Default so a Keyed-only strategy can omit the Atomic overload.
     public func onWrite<Storage: StateContainer, Value>(
         _ value: Value,
         _ keyPath: KeyPath<Storage, Value>,
         policy: Policy
     ) {}
 
+    /// Default so an Atomic-only strategy can omit the Keyed overload.
     public func onWrite<Storage: StateContainer, Key: Hashable, Value>(
         _ value: Value,
         _ keyPath: KeyPath<Storage, [Key: Value]>,
@@ -131,11 +135,13 @@ extension AsyncStrategy {
         policy: Policy
     ) {}
 
+    /// Default so a Keyed-only strategy can omit the Atomic overload.
     public func onDrop<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
         policy: Policy
     ) {}
 
+    /// Default so an Atomic-only strategy can omit the Keyed overload.
     public func onDrop<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key,

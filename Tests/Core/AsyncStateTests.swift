@@ -508,7 +508,10 @@ struct AsyncStateWriteTests {
     @Test("Inbound verbs no-op after the Environment dies")
     func deadEnvironmentInboundIsNoop() {
         var env: SharedEnvironment? = SharedEnvironment()
-        let strategyEnv = env!.strategyEnvironment()
+        guard let strategyEnv = env?.strategyEnvironment() else {
+            Issue.record("Environment should exist before drop")
+            return
+        }
         env = nil
 
         strategyEnv.apply("dark", keyPath: \AsyncBox.theme)
