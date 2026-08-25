@@ -58,31 +58,9 @@ final class SpawnProbeService: EnvironmentService {
     }
 }
 
+@Suite("Service perform and spawn", .serialized)
 @MainActor
-final class SpawningSource: Source {
-    typealias Failure = Never
-    let sourceUpdate = SourceUpdate.write
-    private(set) var lastEnvironment: SourceEnvironment?
-
-    init() {}
-
-    func provide<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
-        policy _: Void,
-        in env: SourceEnvironment
-    ) {
-        lastEnvironment = env
-        env.spawnService(SpawnProbeService.self)
-    }
-}
-
-final class SpawnFromProvideBox: StateContainer {
-    @AsyncState(SpawningSource.self) var theme: String = "system"
-}
-
-@Suite("Service perform and Source spawn", .serialized)
-@MainActor
-struct ServicePerformAndSourceSpawnTests {
+struct ServicePerformAndSpawnTests {
 
     @Test("A Service perform(SyncOperation) writes through that Operation")
     func servicePerformWritesThroughOperation() async {
@@ -102,39 +80,6 @@ struct ServicePerformAndSourceSpawnTests {
         #expect(throws: ServicePerformFailure.boom) {
             try service.perform(ServiceThrowingSync())
         }
-    }
-
-    @Test("SourceEnvironment.spawnService creates if missing and does not await serve()")
-    func sourceSpawnCreatesWithoutAwaitingServe() async throws {
-        SpawnProbeService.last = nil
-        let env = SharedEnvironment()
-        let source = SpawningSource()
-        env.install(source)
-        env.preheat(\SpawnFromProvideBox.theme)
-
-        let created = SpawnProbeService.last
-        #expect(created != nil)
-        #expect(created?.serveCount == 0)
-
-        source.lastEnvironment?.spawnService(SpawnProbeService.self)
-        #expect(SpawnProbeService.last === created)
-
-        try await created?.served.wait()
-        #expect(created?.serveCount == 1)
-    }
-
-    @Test("SourceEnvironment still cannot perform an arbitrary Operation")
-    func sourceCannotPerformArbitraryOperation() async throws {
-        SpawnProbeService.last = nil
-        let env = SharedEnvironment()
-        let source = SpawningSource()
-        env.install(source)
-        env.preheat(\SpawnFromProvideBox.theme)
-        try await SpawnProbeService.last?.served.wait()
-
-        #expect(env.read(\ServicePerformBox.count) == 0)
-        source.lastEnvironment?.spawnService(PerformingService.self)
-        #expect(env.read(\ServicePerformBox.count) == 0)
     }
 
     @Test("SharedEnvironment.spawnService still awaits first serve()")

@@ -14,8 +14,8 @@
 
 import Foundation
 
-/// Hidden Sync operation for Source verbs. Apps do not perform it.
-struct SourceWrite: SyncOperation {
+/// Hidden Sync operation for AsyncStrategy inbound verbs. Apps do not perform it.
+struct StrategyWrite: SyncOperation {
     let apply: (SharedEnvironment) -> Void
 
     func perform(in env: SyncOperationEnvironment) {

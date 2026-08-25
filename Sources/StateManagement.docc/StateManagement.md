@@ -50,15 +50,14 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 - ``SharedEnvironment/getService(_:)``
 - ``SharedEnvironment/spawnService(_:)``
 
-### Source
+### AsyncStrategy
 
-A Source produces inbound Values. Address names the Value. Policy on ``AsyncState`` is how that Address is sourced; it is not a second Address.
+An AsyncStrategy owns read, write, and external side effects for `@AsyncState`. Address names the Value. Policy on ``AsyncState`` is how that Address is backed; it is not a second Address.
 
 - ``AsyncState``
-- ``Source``
+- ``AsyncStrategy``
 - ``SourceStatus``
-- ``SourceUpdate``
-- ``SourceEnvironment``
+- ``AsyncStrategyEnvironment``
 - ``SharedEnvironment/preheat(_:)``
 - ``SharedEnvironment/preheat(_:key:)``
 

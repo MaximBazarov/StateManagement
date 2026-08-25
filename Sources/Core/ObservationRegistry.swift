@@ -41,6 +41,10 @@ import Foundation
     // MARK: - Subscribe -
 
     /// Adds a receiver to be called when the *value* at given *ID* changes.
+    /// Addresses that currently hold at least one receiver. Subscriptions are one-shot, so this
+    /// is how a test tells "still subscribed" from "read and let go".
+    var subscribedValueIDs: [ValueID] { receivers.keys }
+
     public func subscribe(receiver: NotificationReceiver, valueID: ValueID) {
         receivers.register(receiver, on: valueID)
     }

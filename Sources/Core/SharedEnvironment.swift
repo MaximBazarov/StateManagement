@@ -43,9 +43,10 @@ import Foundation
     /// Every in-flight Execution, including `runAll`. Reset Cancels this set.
     private var liveExecutions: [UUID: Execution] = [:]
 
-    var sourceWarehouse: [ObjectIdentifier: any Source] = [:]
-    var sourceRecords: [ValueID: SourceRecord] = [:]
+    var strategyWarehouse: [ObjectIdentifier: any AsyncStrategy] = [:]
+    var strategyRecords: [ValueID: StrategyRecord] = [:]
     var pendingHandle: (any AsyncStateHandle)?
+    var standingStrategyEnvironment: AsyncStrategyEnvironment?
 
     private struct ExecutionGroup: Hashable {
         let operationType: ObjectIdentifier
@@ -111,7 +112,7 @@ import Foundation
 
     // MARK: - Atomic
 
-    /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address calls `provide`.
+    /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address calls `onRead`.
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
@@ -128,6 +129,18 @@ import Foundation
         }
     }
 
+    /// Activates a sourced Address through its `$` Address, with the key when Keyed.
+    /// Same first-read / dirty-read `onRead` rules as ``getValue(keyPath:)``.
+    func getSourcedWrapper<Storage: StateContainer, Wrapper>(
+        keyPath: KeyPath<Storage, Wrapper>,
+        key: AnyHashable?
+    ) -> Wrapper {
+        withWarehouseAccess {
+            let storage = getStorage(Storage.self)
+            return accessSourced(storage, keyPath: keyPath, key: key)
+        }
+    }
+
     /// Sets a value at the given key path and reports a change for observation.
     func setValue<Storage: StateContainer, Value>(
         _ newValue: Value,
@@ -135,7 +148,13 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            storage[keyPath: keyPath] = newValue
+            pendingHandle = nil
+            capturingHandle {
+                storage[keyPath: keyPath] = newValue
+            }
+            if let handle = pendingHandle {
+                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: nil)
+            }
             let valueID = ValueID(
                 keyPath: keyPath
             )
@@ -155,7 +174,7 @@ import Foundation
 
     // MARK: - Dictionary
 
-    /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address calls `provide`.
+    /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address calls `onRead`.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
@@ -183,7 +202,13 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            storage[keyPath: keyPath][key] = newValue
+            pendingHandle = nil
+            capturingHandle {
+                storage[keyPath: keyPath][key] = newValue
+            }
+            if let handle = pendingHandle {
+                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: AnyHashable(key))
+            }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)
             #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
@@ -237,6 +262,24 @@ import Foundation
     ) throws(Op.Failure) {
         try TraceContext.withSpan("Operation: \(String(describing: type(of: operation)))", kind: .user, file: file, line: Int(line)) { () throws(Op.Failure) in
             let environment = SyncOperationEnvironment(self)
+            defer { observation.notifyAll() }
+            do throws(Op.Failure) {
+                try operation.perform(in: environment)
+            } catch {
+                TraceContext.log("failed")
+                throw error
+            }
+        }
+    }
+
+    /// Nested strategy `perform`. The Operation Environment has no `write` or `remove`.
+    func performClosedWrite<Op: ThrowingSyncOperation>(
+        _ operation: Op,
+        file: String = #fileID,
+        line: UInt = #line
+    ) throws(Op.Failure) {
+        try TraceContext.withSpan("Operation: \(String(describing: type(of: operation)))", kind: .user, file: file, line: Int(line)) { () throws(Op.Failure) in
+            let environment = SyncOperationEnvironment(self, allowsWrite: false)
             defer { observation.notifyAll() }
             do throws(Op.Failure) {
                 try operation.perform(in: environment)
@@ -551,14 +594,6 @@ import Foundation
         return service
     }
 
-    /// Shared with Source spawn so both paths own one instance per type.
-    func spawnServiceAndKick<Service: EnvironmentService>(_ type: Service.Type) {
-        let (service, created) = serviceInstance(type)
-        if created {
-            service.startServing()
-        }
-    }
-
     private func serviceInstance<Service: EnvironmentService>(_ type: Service.Type) -> (Service, created: Bool) {
         let id = Service.id()
         if let existing = serviceWarehouse[id] {
@@ -575,7 +610,7 @@ import Foundation
         cancelAllExecutions()
         dropAllServices()
         dropAllRecords()
-        sourceWarehouse.removeAll()
+        strategyWarehouse.removeAll()
         observation.invalidateSubscribed()
         warehouse.removeAll()
     }

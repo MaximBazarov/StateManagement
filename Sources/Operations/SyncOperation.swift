@@ -13,6 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
+import OSLog
+
+private let syncOperationLogger = Logger(
+    subsystem: "StateManagement",
+    category: "SyncOperation"
+)
 
 /// A Sync operation that may throw `Failure`.
 ///
@@ -34,9 +40,11 @@ import Foundation
 /// We use those for operations to restrict which actions they could take and define the observation behavior.
 @MainActor public final class SyncOperationEnvironment {
     unowned var environment: SharedEnvironment
+    let allowsWrite: Bool
 
-    init(_ environment: SharedEnvironment) {
+    init(_ environment: SharedEnvironment, allowsWrite: Bool = true) {
         self.environment = environment
+        self.allowsWrite = allowsWrite
     }
 
     public func perform<Op: ThrowingSyncOperation>(
@@ -44,7 +52,11 @@ import Foundation
         file: String = #fileID,
         line: UInt = #line
     ) throws(Op.Failure) {
-        try environment.perform(operation, file: file, line: line)
+        if allowsWrite {
+            try environment.perform(operation, file: file, line: line)
+        } else {
+            try environment.performClosedWrite(operation, file: file, line: line)
+        }
     }
 
     /// Starts a non-throwing async Operation without waiting. Throwing async is `try await` only.
@@ -68,6 +80,10 @@ import Foundation
         _ newValue: Value,
         keyPath: WritableKeyPath<Storage, Value>
     ) {
+        guard allowsWrite else {
+            syncOperationLogger.debug("Nested strategy perform has no write")
+            return
+        }
         environment.setValue(newValue, keyPath: keyPath)
     }
 
@@ -87,6 +103,10 @@ import Foundation
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
+        guard allowsWrite else {
+            syncOperationLogger.debug("Nested strategy perform has no write")
+            return
+        }
         environment.setValue(newValue, keyPath: keyPath, key: key)
     }
 
@@ -98,15 +118,19 @@ import Foundation
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
+        guard allowsWrite else {
+            syncOperationLogger.debug("Nested strategy perform has no write")
+            return
+        }
         environment.removeValue(keyPath: keyPath, key: key)
     }
 
-    /// Drops every Container, Service, and Source. Cancels every in-flight Execution.
+    /// Drops every Container, Service, and AsyncStrategy. Cancels every in-flight Execution.
     public func reset() {
         environment.resetAll()
     }
 
-    /// Drops the named Container type and calls `dropped` for its sourced Addresses. Cancels every in-flight Execution.
+    /// Drops the named Container type and calls `onDrop` for its sourced Addresses. Cancels every in-flight Execution.
     public func reset<Storage: StateContainer>(_ type: Storage.Type) {
         environment.resetContainer(type)
     }

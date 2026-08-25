@@ -15,53 +15,97 @@
 import Foundation
 
 @MainActor
-final class SourceRecord {
+final class StrategyRecord {
     let handle: any AsyncStateHandle
     var sourcedID: ValueID?
     var statusID: ValueID?
     var dirty = false
-    var didProvide = false
+    var didRead = false
     let key: AnyHashable?
+
+    /// Every ValueID this record answers to: the sourced Address, the status Address, and the
+    /// `$` Address. Inbound State notifies all of them, so a reader that subscribed through one
+    /// of them still hears the change.
+    var addresses: Set<ValueID> = []
+
+    /// Awaitable `$` reads suspended on this Address. Keyed by token so Cancel releases
+    /// only its own waiter.
+    private var waiters: [UUID: (SourcedResume) -> Void] = [:]
 
     init(handle: any AsyncStateHandle, key: AnyHashable?) {
         self.handle = handle
         self.key = key
     }
+
+    func addWaiter(_ token: UUID, _ resume: @escaping (SourcedResume) -> Void) {
+        waiters[token] = resume
+    }
+
+    /// Resumes every waiter once. Drained before the callbacks run, so a second
+    /// resume of the same token finds nothing.
+    func resumeWaiters(with outcome: SourcedResume) {
+        let pending = waiters
+        waiters = [:]
+        for resume in pending.values {
+            resume(outcome)
+        }
+    }
+
+    func resumeWaiter(_ token: UUID, with outcome: SourcedResume) {
+        guard let resume = waiters.removeValue(forKey: token) else { return }
+        resume(outcome)
+    }
 }
 
 extension SharedEnvironment {
     @MainActor
-    private enum SourceAccess {
+    private enum StrategyAccess {
         static var current: SharedEnvironment?
     }
 
     static func noteHandleRead(_ handle: any AsyncStateHandle) {
-        SourceAccess.current?.pendingHandle = handle
+        StrategyAccess.current?.pendingHandle = handle
     }
 
-    func install<S: Source>(_ source: S) {
-        sourceWarehouse[ObjectIdentifier(S.self)] = source
+    func capturingHandle(_ body: () -> Void) {
+        let previous = StrategyAccess.current
+        StrategyAccess.current = self
+        body()
+        StrategyAccess.current = previous
     }
 
-    func sourceInstance<S: Source>(_ type: S.Type) -> S {
-        let id = ObjectIdentifier(S.self)
-        if let existing = sourceWarehouse[id] {
-            // Type is keyed by ObjectIdentifier of S.self.
-            return unsafeDowncast(existing, to: S.self)
+    func strategyEnvironment() -> AsyncStrategyEnvironment {
+        if let existing = standingStrategyEnvironment {
+            return existing
         }
-        let created = S()
-        sourceWarehouse[id] = created
+        let created = AsyncStrategyEnvironment(self)
+        standingStrategyEnvironment = created
         return created
     }
 
-    /// Calls `provide` for a sourced Address without a Watch. Same as first read.
+    func install<S: AsyncStrategy>(_ strategy: S) {
+        strategyWarehouse[ObjectIdentifier(S.self)] = strategy
+    }
+
+    func strategyInstance<S: AsyncStrategy>(_ type: S.Type) -> S {
+        let id = ObjectIdentifier(S.self)
+        if let existing = strategyWarehouse[id] {
+            // Type is keyed by ObjectIdentifier of S.self.
+            return unsafeDowncast(existing, to: S.self)
+        }
+        let created = S(env: strategyEnvironment())
+        strategyWarehouse[id] = created
+        return created
+    }
+
+    /// Calls `onRead` for a sourced Address without a Watch. Same as first read.
     public func preheat<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) {
         _ = read(keyPath)
     }
 
-    /// Calls `provide` for a keyed sourced Address without a Watch. Same as first read.
+    /// Calls `onRead` for a keyed sourced Address without a Watch. Same as first read.
     public func preheat<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
@@ -74,19 +118,19 @@ extension SharedEnvironment {
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
     ) -> Value {
-        let previousAccess = SourceAccess.current
+        let previousAccess = StrategyAccess.current
         let previousHandle = pendingHandle
-        SourceAccess.current = self
+        StrategyAccess.current = self
         pendingHandle = nil
         _ = storage[keyPath: keyPath]
         let handle = pendingHandle
         if let handle {
             activate(handle, keyPath: keyPath, key: key)
         }
-        // First walk records the handle and may `provide`. Nested `deliver` writes before this snapshot.
+        // First walk records the handle and may `onRead`. Nested `apply` writes before this snapshot.
         let value = storage[keyPath: keyPath]
         pendingHandle = previousHandle
-        SourceAccess.current = previousAccess
+        StrategyAccess.current = previousAccess
         return value
     }
 
@@ -95,20 +139,45 @@ extension SharedEnvironment {
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
     ) {
+        // `refresh()` on the wrapper needs the Environment that bound it, even for a keyed
+        // Address read without a key.
+        handle.bind(environment: self)
         if handle.isKeyed, key == nil {
             return
         }
         let valueID = makeValueID(keyPath: keyPath, key: key)
         let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: key)
         handle.seedKeyedPending(key: key)
-        if !record.didProvide {
-            record.didProvide = true
-            provide(record)
+        if !record.didRead {
+            record.didRead = true
+            onRead(record)
             return
         }
         if record.dirty {
-            provide(record)
+            onRead(record)
         }
+    }
+
+    func finishAppWrite<Storage: StateContainer, Value>(
+        _ handle: any AsyncStateHandle,
+        value: Any, // Keyed writes pass the entry; keyPath's Value is the dictionary.
+        keyPath: KeyPath<Storage, Value>,
+        key: AnyHashable?
+    ) {
+        if handle.statusKeyPath == keyPath {
+            return
+        }
+        let valueID = makeValueID(keyPath: keyPath, key: key)
+        let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: key)
+        record.didRead = true
+        record.dirty = false
+        handle.writeDeliver(value, key: key)
+        record.resumeWaiters(with: .inbound)
+        if let statusID = record.statusID {
+            observation.invalidateValue(at: statusID)
+        }
+        let strategy = handle.resolveStrategy(in: self)
+        handle.callOnWrite(strategy, value: value, key: key)
     }
 
     private func makeValueID<Storage: StateContainer, Value>(
@@ -126,34 +195,37 @@ extension SharedEnvironment {
         valueID: ValueID,
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
-    ) -> SourceRecord {
-        if let existing = sourceRecords[valueID] {
+    ) -> StrategyRecord {
+        if let existing = strategyRecords[valueID] {
+            existing.addresses.insert(valueID)
             classify(existing, valueID: valueID, keyPath: keyPath, handle: handle)
             return existing
         }
         if let existing = uniqueRecords.first(where: {
             ObjectIdentifier($0.handle) == ObjectIdentifier(handle) && $0.key == key
         }) {
-            sourceRecords[valueID] = existing
+            strategyRecords[valueID] = existing
+            existing.addresses.insert(valueID)
             classify(existing, valueID: valueID, keyPath: keyPath, handle: handle)
             return existing
         }
-        let created = SourceRecord(handle: handle, key: key)
-        sourceRecords[valueID] = created
+        let created = StrategyRecord(handle: handle, key: key)
+        strategyRecords[valueID] = created
+        created.addresses.insert(valueID)
         classify(created, valueID: valueID, keyPath: keyPath, handle: handle)
         return created
     }
 
-    private var uniqueRecords: [SourceRecord] {
-        var seen: [ObjectIdentifier: SourceRecord] = [:]
-        for record in sourceRecords.values {
+    private var uniqueRecords: [StrategyRecord] {
+        var seen: [ObjectIdentifier: StrategyRecord] = [:]
+        for record in strategyRecords.values {
             seen[ObjectIdentifier(record)] = record
         }
         return Array(seen.values)
     }
 
     private func classify<Storage: StateContainer, Value>(
-        _ record: SourceRecord,
+        _ record: StrategyRecord,
         valueID: ValueID,
         keyPath: KeyPath<Storage, Value>,
         handle: any AsyncStateHandle
@@ -169,23 +241,27 @@ extension SharedEnvironment {
         }
     }
 
-    private func provide(_ record: SourceRecord) {
-        let source = record.handle.resolveSource(in: self)
-        let env = SourceEnvironment(self)
-        record.handle.callProvide(source, env, key: record.key)
+    func callOnRead(_ record: StrategyRecord) {
+        onRead(record)
     }
 
-    func applySourceDeliver<Storage: StateContainer, Value>(
+    private func onRead(_ record: StrategyRecord) {
+        let strategy = record.handle.resolveStrategy(in: self)
+        record.handle.callOnRead(strategy, key: record.key)
+    }
+
+    func applyStrategyApply<Storage: StateContainer, Value>(
         _ value: Value,
         keyPath: KeyPath<Storage, Value>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.handle.writeDeliver(value, key: nil)
         record?.dirty = false
-        notifySource(record)
+        record?.resumeWaiters(with: .inbound)
+        notifyStrategy(record)
     }
 
-    func applySourceKeyedDeliver<Storage: StateContainer, Key: Hashable, Value>(
+    func applyStrategyKeyedApply<Storage: StateContainer, Key: Hashable, Value>(
         _ value: Value,
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
@@ -193,22 +269,24 @@ extension SharedEnvironment {
         let record = recordMatching(keyPath: keyPath, key: key)
         record?.handle.writeDeliver(value, key: key)
         record?.dirty = false
-        notifySource(record)
+        record?.resumeWaiters(with: .inbound)
+        notifyStrategy(record)
     }
 
-    func applySourceFail<Storage: StateContainer, Value>(
+    func applyStrategyFail<Storage: StateContainer, Value>(
         _ error: any Error,
         keyPath: KeyPath<Storage, Value>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.handle.writeFail(error, key: nil)
         record?.dirty = false
+        record?.resumeWaiters(with: .inbound)
         if let statusID = record?.statusID {
             observation.invalidateValue(at: statusID)
         }
     }
 
-    func applySourceKeyedFail<Storage: StateContainer, Key: Hashable, Value>(
+    func applyStrategyKeyedFail<Storage: StateContainer, Key: Hashable, Value>(
         _ error: any Error,
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
@@ -216,31 +294,32 @@ extension SharedEnvironment {
         let record = recordMatching(keyPath: keyPath, key: key)
         record?.handle.writeFail(error, key: key)
         record?.dirty = false
+        record?.resumeWaiters(with: .inbound)
         if let statusID = record?.statusID {
             observation.invalidateValue(at: statusID)
         }
     }
 
-    func applySourceClear<Storage: StateContainer, Value>(
+    func applyStrategyRestoreSeed<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.handle.writeClear(key: nil)
         record?.dirty = false
-        notifySource(record)
+        notifyStrategy(record)
     }
 
-    func applySourceKeyedClear<Storage: StateContainer, Key: Hashable, Value>(
+    func applyStrategyKeyedRestoreSeed<Storage: StateContainer, Key: Hashable, Value>(
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
         let record = recordMatching(keyPath: keyPath, key: key)
         record?.handle.writeClear(key: key)
         record?.dirty = false
-        notifySource(record)
+        notifyStrategy(record)
     }
 
-    func applySourceInvalidate<Storage: StateContainer, Value>(
+    func applyStrategyMarkStale<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
@@ -250,7 +329,7 @@ extension SharedEnvironment {
         }
     }
 
-    func applySourceKeyedInvalidate<Storage: StateContainer, Key: Hashable, Value>(
+    func applyStrategyKeyedMarkStale<Storage: StateContainer, Key: Hashable, Value>(
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: AnyHashable
     ) {
@@ -264,20 +343,21 @@ extension SharedEnvironment {
     private func recordMatching<Storage: StateContainer, Value>(
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
-    ) -> SourceRecord? {
+    ) -> StrategyRecord? {
         let id = makeValueID(keyPath: keyPath, key: key)
-        if let record = sourceRecords[id] {
+        if let record = strategyRecords[id] {
             return record
         }
         if let match = uniqueRecords.first(where: { record in
             record.key == key && Self.addressMatches(record.handle, keyPath: keyPath)
         }) {
-            sourceRecords[id] = match
+            strategyRecords[id] = match
+            match.addresses.insert(id)
             match.sourcedID = id
             return match
         }
         _ = getValue(keyPath: keyPath)
-        if let record = sourceRecords[id] {
+        if let record = strategyRecords[id] {
             return record
         }
         return uniqueRecords.first { record in
@@ -289,7 +369,7 @@ extension SharedEnvironment {
         handle.sourcedKeyPath == keyPath || handle.storageValueKeyPath == keyPath
     }
 
-    private func notifySource(_ record: SourceRecord?) {
+    private func notifyStrategy(_ record: StrategyRecord?) {
         guard let record else { return }
         if let sourcedID = record.sourcedID {
             observation.invalidateValue(at: sourcedID)
@@ -297,19 +377,24 @@ extension SharedEnvironment {
         if let statusID = record.statusID {
             observation.invalidateValue(at: statusID)
         }
+        // The sourced Address can be learned after a `$`-first read, so a reader that
+        // subscribed through the earlier ValueID must still be notified.
+        for address in record.addresses {
+            observation.invalidateValue(at: address)
+        }
     }
 
     func dropAllRecords() {
         for record in uniqueRecords {
             endRecord(record)
         }
-        sourceRecords.removeAll()
+        strategyRecords.removeAll()
     }
 
     func dropRecords<Storage: StateContainer>(in type: Storage.Type) {
-        var kept: [ValueID: SourceRecord] = [:]
+        var kept: [ValueID: StrategyRecord] = [:]
         var ended: Set<ObjectIdentifier> = []
-        for (id, record) in sourceRecords {
+        for (id, record) in strategyRecords {
             if recordBelongs(record, to: type) {
                 let token = ObjectIdentifier(record)
                 if ended.insert(token).inserted {
@@ -319,11 +404,11 @@ extension SharedEnvironment {
                 kept[id] = record
             }
         }
-        sourceRecords = kept
+        strategyRecords = kept
     }
 
     private func recordBelongs<Storage: StateContainer>(
-        _ record: SourceRecord,
+        _ record: StrategyRecord,
         to type: Storage.Type
     ) -> Bool {
         record.handle.sourcedKeyPath is PartialKeyPath<Storage>
@@ -331,8 +416,10 @@ extension SharedEnvironment {
             || record.handle.storageValueKeyPath is PartialKeyPath<Storage>
     }
 
-    private func endRecord(_ record: SourceRecord) {
-        let source = record.handle.resolveSource(in: self)
-        record.handle.callDropped(source, key: record.key)
+    private func endRecord(_ record: StrategyRecord) {
+        // Cancel is not a throw: a hanging awaitable read returns the current Value.
+        record.resumeWaiters(with: .released)
+        let strategy = record.handle.resolveStrategy(in: self)
+        record.handle.callOnDrop(strategy, key: record.key)
     }
 }

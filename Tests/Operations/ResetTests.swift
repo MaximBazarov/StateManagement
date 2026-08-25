@@ -243,28 +243,21 @@ struct ResetThenSetResetCounter: AsyncOperation {
 }
 
 final class ResetSourcedBox: StateContainer {
-    @AsyncState(ResetSource.self) var theme: String = "system"
+    @AsyncState(ResetStrategy.self) var theme: String = "system"
 }
 
 @MainActor
-final class ResetSource: Source {
+final class ResetStrategy: AsyncStrategy {
     typealias Failure = Never
-    let sourceUpdate = SourceUpdate.write
-    private(set) var droppedCount = 0
+    private(set) var onDropCount = 0
 
-    init() {}
+    init(env _: AsyncStrategyEnvironment) {}
 
-    func provide<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
-        policy _: Void,
-        in env: SourceEnvironment
-    ) {}
-
-    func dropped<Storage: StateContainer, Value>(
+    func onDrop<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>,
         policy _: Void
     ) {
-        droppedCount += 1
+        onDropCount += 1
     }
 }
 
@@ -275,32 +268,32 @@ struct ResetSourced: SyncOperation {
 }
 
 @Suite @MainActor
-struct ResetSourceTests {
+struct ResetStrategyTests {
 
-    @Test("reset(_:) calls dropped on the sourced Address and keeps the Source")
-    func targetedResetCallsDropped() {
+    @Test("reset(_:) calls onDrop on the sourced Address and keeps the strategy")
+    func targetedResetCallsOnDrop() {
         let env = SharedEnvironment()
-        let source = ResetSource()
-        env.install(source)
+        let strategy = ResetStrategy(env: env.strategyEnvironment())
+        env.install(strategy)
         env.preheat(\ResetSourcedBox.theme)
-        #expect(source.droppedCount == 0)
+        #expect(strategy.onDropCount == 0)
 
         env.perform(ResetSourced())
 
-        #expect(source.droppedCount == 1)
-        #expect(env.sourceInstance(ResetSource.self) === source)
+        #expect(strategy.onDropCount == 1)
+        #expect(env.strategyInstance(ResetStrategy.self) === strategy)
     }
 
-    @Test("reset() calls dropped and drops the Source instance")
-    func fullResetDropsSourceInstance() {
+    @Test("reset() calls onDrop and drops the strategy instance")
+    func fullResetDropsStrategyInstance() {
         let env = SharedEnvironment()
-        let source = ResetSource()
-        env.install(source)
+        let strategy = ResetStrategy(env: env.strategyEnvironment())
+        env.install(strategy)
         env.preheat(\ResetSourcedBox.theme)
 
         env.perform(ResetAll())
 
-        #expect(source.droppedCount == 1)
-        #expect(env.sourceInstance(ResetSource.self) !== source)
+        #expect(strategy.onDropCount == 1)
+        #expect(env.strategyInstance(ResetStrategy.self) !== strategy)
     }
 }

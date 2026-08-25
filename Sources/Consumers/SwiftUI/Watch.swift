@@ -103,6 +103,16 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
+    /// Marks the watched sourced Address Stale and calls `onRead` again.
+    ///
+    /// Synchronous. The status does not change until the strategy calls `apply` or `fail`, so the
+    /// body keeps rendering the current Value while the reload runs. A keyed Watch refreshes its
+    /// own key. No-op (logged) when the watched Address is not backed by an AsyncStrategy, or
+    /// before the first body read.
+    public func refresh() {
+        environment.refreshAddress(valueID: reader.valueID)
+    }
+
     // MARK: - Internals
 
     /// Builds the reader (`SubscribingValueReader`) and sends `objectWillChange` on its `onChange`.
