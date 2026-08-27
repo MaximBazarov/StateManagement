@@ -83,11 +83,13 @@ public enum NoKey: Hashable {
     // MARK: - Read
 
     /// The single way any computed value is read, by ``Watch``, by ``EnvironmentService``, and by
-    /// other computeds (atomic and keyed alike). Subscribes `receiver` so the
-    /// consumer is notified when this value changes, then serves the cache: returns the stored output
-    /// if present, otherwise runs the closure once, stores the result, and returns it. The closure
-    /// re-registers its dependency edges and installs the hook that clears this cache entry when an
-    /// input changes, so a later cache hit is safe — it only happens while those edges still hold.
+    /// other computeds (atomic and keyed alike). Serves the cache first: returns the stored output
+    /// if present, otherwise runs the closure once, stores the result, and returns it. Then
+    /// subscribes `receiver` so the consumer is notified of later changes. Subscribe after the
+    /// Value is in hand so nested `apply` / `fail` during `onRead` does not notify this reader.
+    /// The closure re-registers its dependency edges and installs the hook that clears this cache
+    /// entry when an input changes, so a later cache hit is safe — it only happens while those
+    /// edges still hold.
     ///
     /// `evaluating` is the history of computeds currently mid-read, threaded down the recursion
     /// (top-level callers rely on the default). If this `valueID` is already in that history, the
@@ -101,8 +103,8 @@ public enum NoKey: Hashable {
         key: Key,
         evaluating: [ValueID] = []
     ) -> Output {
-        env.observation.subscribe(receiver: receiver, valueID: valueID)
         if let cached = cache[key] {
+            env.observation.subscribe(receiver: receiver, valueID: valueID)
             return cached
         }
 
@@ -126,6 +128,7 @@ public enum NoKey: Hashable {
         )
         let value = wrappedValue(compEnv, key)
         cache[key] = value
+        env.observation.subscribe(receiver: receiver, valueID: valueID)
         return value
     }
 }

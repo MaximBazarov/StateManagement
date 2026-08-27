@@ -6,6 +6,7 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ### Fixed
 
+- A synchronous first read that kicks `onRead` is not a receiver of nested `apply` / `fail`. The body already has the applied Value. Other already-subscribed receivers still notify.
 - `@Perform` sends `objectWillChange` only after that instance's `isInProgress` has been read. Dispatch-only views do not re-render on `begin()` / `end()`. The send still hops.
 
 ## [0.9.2] - 2026-08-25

@@ -14,6 +14,9 @@
 
 import Foundation
 import Testing
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
 @testable import StateManagement
 
 enum MockFailure: Error, Equatable {
@@ -93,6 +96,17 @@ final class ApplyingStrategy: AsyncStrategy {
         guard let value = "dark" as? Value else { return }
         env.apply(value, keyPath: path)
     }
+
+    func onRead<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key,
+        policy _: Void,
+        current: Value?
+    ) {
+        guard let path = keyPath as? WritableKeyPath<Storage, [Key: Value]> else { return }
+        guard let value = true as? Value else { return }
+        env.apply(value, keyPath: path, key: key)
+    }
 }
 
 final class AsyncBox: StateContainer {
@@ -137,6 +151,77 @@ final class NestedPerformStrategy: AsyncStrategy {
 
 final class NestedPerformBox: StateContainer {
     @AsyncState(NestedPerformStrategy.self) var theme: String = "system"
+}
+
+final class ApplyingKeyedBox: StateContainer {
+    @AsyncState(ApplyingStrategy.self) var done: [String: Bool] = [:]
+}
+
+final class ApplyingComputedBox: StateContainer {
+    @AsyncState(ApplyingStrategy.self) var theme: String = "system"
+    @Computed var labeled = { (env: ComputationEnvironment) -> String in
+        env.getValue(\ApplyingComputedBox.theme)
+    }
+}
+
+/// `onRead` of any Address applies `theme`, so a first read of `title` notifies an already-subscribed Watch of `theme`.
+@MainActor
+final class CrossApplyStrategy: AsyncStrategy {
+    typealias Failure = Never
+    let env: AsyncStrategyEnvironment
+    private(set) var onReadCount = 0
+
+    init(env: AsyncStrategyEnvironment) {
+        self.env = env
+    }
+
+    func onRead<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>,
+        policy _: Void,
+        current: Value
+    ) {
+        onReadCount += 1
+        let value = onReadCount == 1 ? "dark" : "light"
+        env.apply(value, keyPath: \CrossApplyBox.theme)
+    }
+}
+
+final class CrossApplyBox: StateContainer {
+    @AsyncState(CrossApplyStrategy.self) var theme: String = "system"
+    @AsyncState(CrossApplyStrategy.self) var title: String = "untitled"
+}
+
+@MainActor
+final class ApplyingThemeService: EnvironmentService {
+    private(set) var serveCount = 0
+    private(set) var seen: [String] = []
+
+    override func serve() async {
+        serveCount += 1
+        seen.append(getValue(\ApplyingBox.theme))
+    }
+}
+
+@MainActor
+final class ApplyingKeyedService: EnvironmentService {
+    private(set) var serveCount = 0
+    private(set) var seen: [Bool?] = []
+
+    override func serve() async {
+        serveCount += 1
+        seen.append(getValue(keyPath: \ApplyingKeyedBox.done, key: "a"))
+    }
+}
+
+@MainActor
+final class ApplyingComputedService: EnvironmentService {
+    private(set) var serveCount = 0
+    private(set) var seen: [String] = []
+
+    override func serve() async {
+        serveCount += 1
+        seen.append(getValue(\ApplyingComputedBox.$labeled))
+    }
 }
 
 struct SetAsyncTheme: SyncOperation {
@@ -640,3 +725,165 @@ struct AsyncStatePolicyTests {
         #expect(strategy.lastKeyedOnDropPolicy == ProbePolicy(id: "keyed"))
     }
 }
+
+// MARK: - First-read nested inbound
+
+@Suite @MainActor
+struct AsyncStateFirstReadTests {
+
+    @Test("First Watch of an apply-inside-onRead Address has one body and the applied Value")
+    func firstWatchOfApplyInsideOnReadHasOneBody() {
+        let env = SharedEnvironment()
+        let strategy = ApplyingStrategy(env: env.strategyEnvironment())
+        env.install(strategy)
+
+        let probe = ValueObserverProbe.watch(\ApplyingBox.theme, in: env)
+
+        probe.expect(value: "dark")
+        #expect(probe.renderCount == 1)
+        probe.expect(updates: 0)
+    }
+
+    @Test("First Watch of a keyed apply-inside-onRead Address has one body and the applied Value")
+    func firstWatchOfKeyedApplyInsideOnReadHasOneBody() {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+
+        let probe = ValueObserverProbe.watchKeyed(\ApplyingKeyedBox.done, key: "a", in: env)
+
+        probe.expect(value: true)
+        #expect(probe.renderCount == 1)
+        probe.expect(updates: 0)
+    }
+
+    @Test("First Watch of a Computed that reads apply-inside-onRead has one body and the applied Value")
+    func firstWatchOfComputedApplyInsideOnReadHasOneBody() {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+
+        let probe = ValueObserverProbe.watch(computed: \ApplyingComputedBox.$labeled, in: env)
+
+        probe.expect(value: "dark")
+        #expect(probe.renderCount == 1)
+        probe.expect(updates: 0)
+    }
+
+    @Test("First Watch of a fail-inside-onRead status Address has one body and the error")
+    func firstWatchOfFailInsideOnReadHasOneBody() {
+        let env = SharedEnvironment()
+        env.install(FailingStrategy(env: env.strategyEnvironment()))
+
+        let probe = ValueObserverProbe.watch(\FailingBox.$theme.status, in: env)
+
+        probe.expect(value: SourceStatus<MockFailure>.error(.boom))
+        #expect(probe.renderCount == 1)
+        probe.expect(updates: 0)
+    }
+
+    @Test("An already-subscribed Watch still hears nested inbound from another Address's first onRead")
+    func alreadySubscribedWatchHearsNestedInbound() {
+        let env = SharedEnvironment()
+        env.install(CrossApplyStrategy(env: env.strategyEnvironment()))
+
+        let theme = ValueObserverProbe.watch(\CrossApplyBox.theme, in: env)
+        theme.expect(value: "dark")
+        theme.expect(updates: 0)
+
+        let title = ValueObserverProbe.watch(\CrossApplyBox.title, in: env)
+
+        title.expect(value: "untitled")
+        title.expect(updates: 0)
+        theme.expect(value: "light")
+        theme.expect(updates: 1)
+    }
+
+    @Test("A later apply still notifies the Watch that skipped nested inbound")
+    func laterApplyStillNotifiesAfterFirstRead() {
+        let env = SharedEnvironment()
+        let strategy = ApplyingStrategy(env: env.strategyEnvironment())
+        env.install(strategy)
+
+        let probe = ValueObserverProbe.watch(\ApplyingBox.theme, in: env)
+        probe.expect(value: "dark")
+        probe.expect(updates: 0)
+
+        strategy.env.apply("light", keyPath: \ApplyingBox.theme)
+
+        probe.expect(value: "light")
+        probe.expect(updates: 1)
+    }
+
+    @Test("EnvironmentService getValue of apply-inside-onRead serves once with the applied Value")
+    func serviceGetValueOfApplyInsideOnReadServesOnce() async {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+
+        let service = await env.spawnService(ApplyingThemeService.self)
+
+        #expect(service.seen == ["dark"])
+        #expect(service.serveCount == 1)
+        #expect(await waitUntil(timeout: .milliseconds(150)) { service.serveCount > 1 } == false)
+    }
+
+    @Test("EnvironmentService getValue of a keyed apply-inside-onRead serves once with the applied Value")
+    func serviceKeyedGetValueOfApplyInsideOnReadServesOnce() async {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+
+        let service = await env.spawnService(ApplyingKeyedService.self)
+
+        #expect(service.seen == [true])
+        #expect(service.serveCount == 1)
+        #expect(await waitUntil(timeout: .milliseconds(150)) { service.serveCount > 1 } == false)
+    }
+
+    @Test("EnvironmentService getValue of a Computed that reads apply-inside-onRead serves once with the applied Value")
+    func serviceComputedGetValueOfApplyInsideOnReadServesOnce() async {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+
+        let service = await env.spawnService(ApplyingComputedService.self)
+
+        #expect(service.seen == ["dark"])
+        #expect(service.serveCount == 1)
+        #expect(await waitUntil(timeout: .milliseconds(150)) { service.serveCount > 1 } == false)
+    }
+
+    #if canImport(AppKit) || canImport(UIKit)
+    @Test("First HostedView Watch of apply-inside-onRead shows the applied Value and does not re-evaluate after")
+    func firstHostedWatchOfApplyInsideOnReadStaysOnOneFrame() async {
+        let env = SharedEnvironment()
+        env.install(ApplyingStrategy(env: env.strategyEnvironment()))
+        let counter = ApplyingRenderCounter()
+
+        let host = HostedView.mount(ApplyingWatchView(counter: counter).sharedEnvironment(env))
+        defer { host.teardown() }
+
+        #expect(await waitUntil { counter.last == "dark" })
+        let settled = counter.count
+        #expect(await waitUntil(timeout: .milliseconds(200)) { counter.count > settled } == false)
+        #expect(counter.last == "dark")
+    }
+    #endif
+}
+
+#if canImport(AppKit) || canImport(UIKit)
+@MainActor
+final class ApplyingRenderCounter {
+    var count = 0
+    var last: String?
+}
+
+@MainActor
+struct ApplyingWatchView: View {
+    let counter: ApplyingRenderCounter
+    @Watch(\ApplyingBox.theme) var theme
+
+    var body: some View {
+        let _ = counter.count += 1
+        let _ = counter.last = theme
+        Text(theme)
+    }
+}
+#endif
+

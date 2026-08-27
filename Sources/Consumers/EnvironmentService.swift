@@ -204,11 +204,12 @@ import Foundation
     ) -> Value {
         // Dropped Service must not recreate warehouse State by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath] }
+        let value = env.getValue(keyPath: keyPath)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath)
         )
-        return env.getValue(keyPath: keyPath)
+        return value
     }
 
     /// Get value subscribing.
@@ -220,11 +221,12 @@ import Foundation
     ) -> Value? {
         // Dropped Service must not recreate warehouse State by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath][key] }
+        let value = env.getValue(keyPath: keyPath, key: key)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath, key: key)
         )
-        return env.getValue(keyPath: keyPath, key: key)
+        return value
     }
 
     // MARK: - Awaitable sourced read

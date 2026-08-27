@@ -29,8 +29,10 @@ import Foundation
     /// the owner (`Watch` forwards it to `objectWillChange`; a probe re-renders).
     public var onChange: (() -> Void)?
 
-    /// Encapsulates the per-flavour read: subscribe to the `ValueID` (and, for
-    /// computeds, register dependencies) then return the value.
+    /// Encapsulates the per-flavour read: take the Value, then subscribe to the
+    /// `ValueID` (and, for computeds, register dependencies). Subscribe after the
+    /// Value is in hand so nested `apply` / `fail` during `onRead` does not notify
+    /// this reader.
     private let readValue: (SharedEnvironment, NotificationReceiver) -> Value
 
     /// Gets the current value from the environment.
@@ -74,7 +76,7 @@ import Foundation
     }
 
     /// Reads the value directly from the provided environment.
-    /// Subscribes, computes the value, caches it as the diffing baseline, and returns it.
+    /// Computes the value, then subscribes, caches it as the diffing baseline, and returns it.
     func read(in environment: SharedEnvironment) -> Value {
         // TODO: This looks like a good place to centralise a single way of reading the value subscribing etc. research if it's possible.
         // later this can be used in computation as well so we don't produce a separate cache? so basically making keyed and non keyed value cache the same way like in the computed?
@@ -103,8 +105,9 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader {
         let valueID = ValueID(keyPath: statePath)
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
+            let value = env.getValue(keyPath: statePath)
             env.observation.subscribe(receiver: receiver, valueID: valueID)
-            return env.getValue(keyPath: statePath)
+            return value
         }
     }
 
@@ -143,8 +146,9 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader where Value == Output? {
         let valueID = ValueID(keyPath: statePath, key: AnyHashable(key))
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
+            let value = env.getValue(keyPath: statePath, key: key)
             env.observation.subscribe(receiver: receiver, valueID: valueID)
-            return env.getValue(keyPath: statePath, key: key)
+            return value
         }
     }
 

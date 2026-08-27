@@ -50,63 +50,67 @@ import Foundation
         self.evaluating = evaluating
     }
 
-    /// Reads an **atomic state** value, subscribes to its changes and registers as a dependant.
+    /// Reads an **atomic state** value, then registers as a dependant and subscribes.
     public func getValue<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         let targetValueID = ValueID(keyPath: keyPath)
+        let value = env.getValue(keyPath: keyPath)
         env.observation.register(dependent: dependent, on: targetValueID)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: targetValueID
         )
-        return env.getValue(keyPath: keyPath)
+        return value
     }
 
-    /// Reads a **keyed state** value, subscribes to its changes and registers as a dependant.
+    /// Reads a **keyed state** value, then registers as a dependant and subscribes.
     public func getValue<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
         let targetValueID = ValueID(keyPath: keyPath, key: key)
+        let value = env.getValue(keyPath: keyPath, key: key)
         env.observation.register(dependent: dependent, on: targetValueID)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: targetValueID
         )
-        return env.getValue(keyPath: keyPath, key: key)
+        return value
     }
 
-    /// Reads another ``Computed`` **atomic state** value, subscribes to its changes and registers as a dependant.
+    /// Reads another ``Computed`` **atomic state** value, then registers as a dependant.
     public func getValue<Storage: StateContainer, Output>(
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         let innerID = ValueID(keyPath: keyPath)
-        env.observation.register(dependent: dependent, on: innerID)
         let computation = env.getValue(keyPath: keyPath)
-        return computation.read(
+        let value = computation.read(
             env: env,
             valueID: innerID,
             receiver: notificationReceiver,
             key: .noKey,
             evaluating: evaluating
         )
+        env.observation.register(dependent: dependent, on: innerID)
+        return value
     }
 
-    /// Reads another ``Computed`` **keyed state** value, subscribes to its changes and registers as a dependant.
+    /// Reads another ``Computed`` **keyed state** value, then registers as a dependant.
     public func getValue<Storage: StateContainer, Key: Hashable, Output>(
         _ keyPath: KeyPath<Storage, Computed<Key, Output>>,
         key: Key
     ) -> Output {
         let innerID = ValueID(keyPath: keyPath, key: key)
-        env.observation.register(dependent: dependent, on: innerID)
         let computation = env.getValue(keyPath: keyPath)
-        return computation.read(
+        let value = computation.read(
             env: env,
             valueID: innerID,
             receiver: notificationReceiver,
             key: key,
             evaluating: evaluating
         )
+        env.observation.register(dependent: dependent, on: innerID)
+        return value
     }
 }
