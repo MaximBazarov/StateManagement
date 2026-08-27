@@ -75,6 +75,21 @@ struct AAAwaitChildThenIncrement: AsyncOperation {
     }
 }
 
+/// Starts a held child without waiting, then writes.
+struct AAFireChildThenSet: AsyncOperation {
+    var reentrancy: ReentrancyDecision { .runAll }
+    let gate: HoldGate
+    let childValue: Int
+    let parentValue: Int
+    func perform(in env: AsyncOperationEnvironment) async {
+        func startChild() {
+            env.perform(AAHoldThenSet(gate: gate, value: childValue))
+        }
+        startChild()
+        env.perform(AASetX(value: parentValue))
+    }
+}
+
 // MARK: - Tests
 
 /// The awaited `perform(_: AsyncOperation) async` overload must finish all of
@@ -154,5 +169,23 @@ struct NestedAsyncOperationAwaitTests {
         await parent
 
         #expect(env.read(\AAState.x) == 0)
+    }
+
+    @Test("A parent starts a non-throwing child without await and continues before the child writes")
+    func parentFireAndForgetChildDoesNotWait() async throws {
+        let env = SharedEnvironment()
+        let gate = HoldGate()
+
+        async let parent: Void = env.perform(
+            AAFireChildThenSet(gate: gate, childValue: 5, parentValue: 1)
+        )
+        await gate.waitForArrival()
+        await parent
+
+        #expect(env.read(\AAState.x) == 1)
+
+        gate.release()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(env.read(\AAState.x) == 5)
     }
 }

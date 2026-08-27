@@ -85,8 +85,7 @@ public enum NoKey: Hashable {
     /// The single way any computed value is read, by ``Watch``, by ``EnvironmentService``, and by
     /// other computeds (atomic and keyed alike). Serves the cache first: returns the stored output
     /// if present, otherwise runs the closure once, stores the result, and returns it. Then
-    /// subscribes `receiver` so the consumer is notified of later changes. Subscribe after the
-    /// Value is in hand so nested `apply` / `fail` during `onRead` does not notify this reader.
+    /// subscribes `receiver` so the consumer is notified of later changes.
     /// The closure re-registers its dependency edges and installs the hook that clears this cache
     /// entry when an input changes, so a later cache hit is safe — it only happens while those
     /// edges still hold.
@@ -96,6 +95,8 @@ public enum NoKey: Hashable {
     /// closure is about to read itself — a dependency cycle: the chain is reported through telemetry
     /// and then trapped. A cache hit returns before the check, so it can never recurse. See ADR 0004
     /// (composition) and ADR 0014 (cycle guard).
+    /// Subscribe after the Value is in hand so nested inbound during `onRead` does not notify this reader.
+    @_documentation(visibility: private)
     func read(
         env: SharedEnvironment,
         valueID: ValueID,

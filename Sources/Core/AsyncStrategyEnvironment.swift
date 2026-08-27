@@ -54,9 +54,9 @@ public final class AsyncStrategyEnvironment {
         })
     }
 
-    /// Writes the keyed Value and `.settled`, and clears dirty.
+    /// Writes the keyed Value and `.settled`, and clears dirty. `nil` settles a missing key.
     public func apply<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        _ value: Value,
+        _ value: Value?,
         keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
         key: Key
     ) {

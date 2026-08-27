@@ -30,9 +30,7 @@ import Foundation
     public var onChange: (() -> Void)?
 
     /// Encapsulates the per-flavour read: take the Value, then subscribe to the
-    /// `ValueID` (and, for computeds, register dependencies). Subscribe after the
-    /// Value is in hand so nested `apply` / `fail` during `onRead` does not notify
-    /// this reader.
+    /// `ValueID` (and, for computeds, register dependencies).
     private let readValue: (SharedEnvironment, NotificationReceiver) -> Value
 
     /// Gets the current value from the environment.

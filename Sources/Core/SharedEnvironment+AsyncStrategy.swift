@@ -284,12 +284,16 @@ extension SharedEnvironment {
     }
 
     func applyStrategyKeyedApply<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        _ value: Value,
+        _ value: Value?,
         keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
         key: Key
     ) {
         let record = recordMatching(keyPath: keyPath, key: AnyHashable(key))
-        record?.handle.writeDeliver(value, key: key)
+        if let value {
+            record?.handle.writeDeliver(value, key: key)
+        } else {
+            record?.handle.writeKeyedSettled(key: key)
+        }
         record?.dirty = false
         record?.resumeWaiters(with: .inbound)
         notifyStrategy(record)

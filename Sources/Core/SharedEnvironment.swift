@@ -339,6 +339,8 @@ import Foundation
         }
     }
 
+    /// Disfavored so `perform(child)` in an async body stays fire-and-forget; `await perform(child)` still waits.
+    @_disfavoredOverload
     public func perform<Op: AsyncOperation>(
         _ operation: Op,
         file: String = #fileID,
