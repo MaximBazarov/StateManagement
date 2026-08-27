@@ -4,6 +4,10 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.
+
 ### Fixed
 
 - A synchronous first read that kicks `onRead` is not a receiver of nested `apply` / `fail`. The body already has the applied Value. Other already-subscribed receivers still notify.
