@@ -6,6 +6,7 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ### Fixed
 
+- Nested sync `perform` shares the original Operation. Observers see one notification with the final Value. Same-stack strategy inbound joins that round.
 - `@Perform` sends `objectWillChange` only after that instance's `isInProgress` has been read. Dispatch-only views do not re-render on `begin()` / `end()`. The send still hops.
 
 ## [0.9.2] - 2026-08-25
