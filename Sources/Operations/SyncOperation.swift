@@ -47,6 +47,7 @@ private let syncOperationLogger = Logger(
         self.allowsWrite = allowsWrite
     }
 
+    /// Nested sync `perform` shares this Environment. Notification waits for the original `SharedEnvironment.perform`.
     public func perform<Op: ThrowingSyncOperation>(
         _ operation: Op,
         file: String = #fileID,

@@ -48,6 +48,9 @@ import Foundation
     var pendingHandle: (any AsyncStateHandle)?
     var standingStrategyEnvironment: AsyncStrategyEnvironment?
 
+    /// Nested sync `perform` joins this Environment. `notifyAll` waits until this original unwinds.
+    private var originalSyncEnvironment: SyncOperationEnvironment?
+
     private struct ExecutionGroup: Hashable {
         let operationType: ObjectIdentifier
         let identity: ReentrancyIdentity
@@ -260,33 +263,50 @@ import Foundation
         file: String = #fileID,
         line: UInt = #line
     ) throws(Op.Failure) {
-        try TraceContext.withSpan("Operation: \(String(describing: type(of: operation)))", kind: .user, file: file, line: Int(line)) { () throws(Op.Failure) in
-            let environment = SyncOperationEnvironment(self)
-            defer { observation.notifyAll() }
-            do throws(Op.Failure) {
-                try operation.perform(in: environment)
-            } catch {
-                TraceContext.log("failed")
-                throw error
-            }
-        }
+        try performSync(operation, allowsWrite: true, file: file, line: line)
     }
 
     /// Nested strategy `perform`. The Operation Environment has no `write` or `remove`.
+    /// Same-stack, it joins the original observation round and stays write-closed.
     func performClosedWrite<Op: ThrowingSyncOperation>(
         _ operation: Op,
         file: String = #fileID,
         line: UInt = #line
     ) throws(Op.Failure) {
+        try performSync(operation, allowsWrite: false, file: file, line: line)
+    }
+
+    private func performSync<Op: ThrowingSyncOperation>(
+        _ operation: Op,
+        allowsWrite: Bool,
+        file: String,
+        line: UInt
+    ) throws(Op.Failure) {
         try TraceContext.withSpan("Operation: \(String(describing: type(of: operation)))", kind: .user, file: file, line: Int(line)) { () throws(Op.Failure) in
-            let environment = SyncOperationEnvironment(self, allowsWrite: false)
-            defer { observation.notifyAll() }
-            do throws(Op.Failure) {
-                try operation.perform(in: environment)
-            } catch {
-                TraceContext.log("failed")
-                throw error
+            if let original = originalSyncEnvironment {
+                let nested = allowsWrite ? original : SyncOperationEnvironment(self, allowsWrite: false)
+                try runSync(operation, in: nested)
+                return
             }
+            let environment = SyncOperationEnvironment(self, allowsWrite: allowsWrite)
+            originalSyncEnvironment = environment
+            defer {
+                originalSyncEnvironment = nil
+                observation.notifyAll()
+            }
+            try runSync(operation, in: environment)
+        }
+    }
+
+    private func runSync<Op: ThrowingSyncOperation>(
+        _ operation: Op,
+        in environment: SyncOperationEnvironment
+    ) throws(Op.Failure) {
+        do throws(Op.Failure) {
+            try operation.perform(in: environment)
+        } catch {
+            TraceContext.log("failed")
+            throw error
         }
     }
 

@@ -47,6 +47,28 @@ struct NestedThenThrow: ThrowingSyncOperation {
     }
 }
 
+struct WriteCount: SyncOperation {
+    let value: Int
+    func perform(in env: SyncOperationEnvironment) {
+        env.write(value, keyPath: \ThrowSyncState.count)
+    }
+}
+
+struct NestedSameAddressWrites: SyncOperation {
+    func perform(in env: SyncOperationEnvironment) {
+        env.perform(WriteCount(value: 1))
+        env.perform(WriteCount(value: 2))
+    }
+}
+
+struct AsyncParentSyncChildren: AsyncOperation {
+    var reentrancy: ReentrancyDecision { .runAll }
+    func perform(in env: AsyncOperationEnvironment) async {
+        env.perform(WriteCount(value: 1))
+        env.perform(WriteCount(value: 2))
+    }
+}
+
 @Suite @MainActor
 struct ThrowingSyncOperationTests {
 
@@ -108,5 +130,29 @@ struct ThrowingSyncOperationTests {
         count.expect(value: 1)
         other.expect(updates: 1)
         other.expect(value: 1)
+    }
+
+    @Test("Nested perform on the same Address notifies once with the final Value")
+    func nestedSameAddressNotifiesOnce() {
+        let env = SharedEnvironment()
+        let probe = ValueObserverProbe.watch(\ThrowSyncState.count, in: env)
+
+        env.perform(NestedSameAddressWrites())
+
+        #expect(env.read(\ThrowSyncState.count) == 2)
+        probe.expect(updates: 1)
+        probe.expect(value: 2)
+    }
+
+    @Test("An Async parent's Sync children stay separate originals")
+    func asyncParentSyncChildrenStaySeparateOriginals() async {
+        let env = SharedEnvironment()
+        let probe = ValueObserverProbe.watch(\ThrowSyncState.count, in: env)
+
+        await env.perform(AsyncParentSyncChildren())
+
+        #expect(env.read(\ThrowSyncState.count) == 2)
+        probe.expect(updates: 2)
+        probe.expect(value: 2)
     }
 }

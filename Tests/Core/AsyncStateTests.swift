@@ -224,6 +224,15 @@ final class ApplyingComputedService: EnvironmentService {
     }
 }
 
+struct NestedWriteThenApplyThenWrite: SyncOperation {
+    let strategyEnv: AsyncStrategyEnvironment
+    func perform(in env: SyncOperationEnvironment) {
+        env.write(1, keyPath: \NestedWriteBox.count)
+        strategyEnv.apply("dark", keyPath: \AsyncBox.theme)
+        env.write(2, keyPath: \NestedWriteBox.count)
+    }
+}
+
 struct SetAsyncTheme: SyncOperation {
     let value: String
     func perform(in env: SyncOperationEnvironment) {
@@ -578,6 +587,21 @@ struct AsyncStateWriteTests {
         strategy.env.markStale(keyPath: \AsyncBox.theme)
 
         #expect(strategy.onWriteCount == 0)
+    }
+
+    @Test("Same-stack apply joins the original Operation's observation round")
+    func sameStackApplyJoinsObservationRound() {
+        let env = SharedEnvironment()
+        let strategy = env.installed(MockStrategy.self)
+        env.preheat(\AsyncBox.theme)
+        let probe = ValueObserverProbe.watch(\NestedWriteBox.count, in: env)
+
+        env.perform(NestedWriteThenApplyThenWrite(strategyEnv: strategy.env))
+
+        #expect(env.read(\NestedWriteBox.count) == 2)
+        #expect(env.read(\AsyncBox.theme) == "dark")
+        probe.expect(updates: 1)
+        probe.expect(value: 2)
     }
 
     @Test("Nested strategy perform has no write")
