@@ -2,6 +2,12 @@
 
 All notable changes to StateManagement are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0, expect breaking changes between minor versions.
 
+## [Unreleased]
+
+### Fixed
+
+- `@Perform` sends `objectWillChange` only after that instance's `isInProgress` has been read. Dispatch-only views do not re-render on `begin()` / `end()`. The send still hops.
+
 ## [0.9.2] - 2026-08-25
 
 ### Added

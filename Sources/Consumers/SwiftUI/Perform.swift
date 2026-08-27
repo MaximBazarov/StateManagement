@@ -20,15 +20,25 @@ import SwiftUI
 @MainActor
 final class PerformInFlight: ObservableObject {
     private(set) var count = 0
-    var isInProgress: Bool { count > 0 }
+    /// Sticky: once `isInProgress` is read, this instance invalidates on begin/end.
+    private var sendsInvalidation = false
+
+    var isInProgress: Bool {
+        sendsInvalidation = true
+        return count > 0
+    }
 
     func begin() {
-        objectWillChange.sendAfterViewUpdate()
+        if sendsInvalidation {
+            objectWillChange.sendAfterViewUpdate()
+        }
         count += 1
     }
 
     func end() {
-        objectWillChange.sendAfterViewUpdate()
+        if sendsInvalidation {
+            objectWillChange.sendAfterViewUpdate()
+        }
         count -= 1
     }
 }
