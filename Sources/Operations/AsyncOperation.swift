@@ -54,12 +54,22 @@ import Foundation
         try environment.perform(operation, file: file, line: line)
     }
 
+    /// Starts a non-throwing async Operation without waiting.
     public func perform<Op: AsyncOperation>(
         _ operation: Op,
         file: String = #fileID,
         line: UInt = #line
     ) {
         environment.perform(operation, file: file, line: line)
+    }
+
+    /// Waits for a non-throwing async Operation. Same pair ``SharedEnvironment`` already has.
+    public func perform<Op: AsyncOperation>(
+        _ operation: Op,
+        file: String = #fileID,
+        line: UInt = #line
+    ) async {
+        await environment.perform(operation, file: file, line: line)
     }
 
     public func perform<Op: ThrowingAsyncOperation>(

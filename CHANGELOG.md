@@ -4,6 +4,10 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ## [Unreleased]
 
+### Added
+
+- `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.
+
 ### Fixed
 
 - `@Perform` sends `objectWillChange` only after that instance's `isInProgress` has been read. Dispatch-only views do not re-render on `begin()` / `end()`. The send still hops.
