@@ -32,20 +32,21 @@ public enum NoKey: Hashable {
 /// > Note The result is cached. The closure runs on the first read, then the value is reused until invalidated.
 /// Reading the same computed from many places in one update costs one computation.
 ///
-/// In the following simple example `count` and `itemLength`
-/// are automatically recomputed when `ListContainer.items` change and readers are notified.
+/// In the following example `count` recomputes when `items` change; `isDone`
+/// recomputes when that id's `done` flag changes.
 /// ```swift
 /// final class ListContainer: StateContainer {
 ///     var items: [UUID] = []
+///     var done: [UUID: Bool] = [:]
 ///
-///     // Atomic computed is equal to the count of the items.
+///     // Atomic computed: equal to the count of the items.
 ///     @Computed var count = { env in
 ///         env.getValue(\ListContainer.items).count
 ///     }
 ///
-///     // Keyed computed, is equal to the length of the item at provided id.
-///     @Computed<UUID, Bool> var itemLength = { env, key in
-///         env.getValue(\ListContainer.items, key: id).count
+///     // Keyed computed: derived per item id.
+///     @Computed<UUID, Bool> var isDone = { env, id in
+///         env.getValue(\ListContainer.done, key: id) ?? false
 ///     }
 /// }
 /// ```
