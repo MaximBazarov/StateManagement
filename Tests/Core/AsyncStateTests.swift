@@ -38,8 +38,8 @@ final class MockStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<MockStrategy, Value, Status>>,
         policy _: Void,
         current: Value
     ) {
@@ -47,8 +47,8 @@ final class MockStrategy: AsyncStrategy {
         lastCurrent = current
     }
 
-    func onRead<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onRead<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<MockStrategy, [Key: Value], Status>>,
         key: Key,
         policy _: Void,
         current: Value?
@@ -57,18 +57,18 @@ final class MockStrategy: AsyncStrategy {
         lastCurrent = current
     }
 
-    func onWrite<Storage: StateContainer, Value>(
+    func onWrite<Storage: StateContainer, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, Value>,
+        _ keyPath: KeyPath<Storage, AsyncState<MockStrategy, Value, Status>>,
         policy _: Void
     ) {
         onWriteCount += 1
         lastWritten = value
     }
 
-    func onWrite<Storage: StateContainer, Key: Hashable, Value>(
+    func onWrite<Storage: StateContainer, Key: Hashable, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        _ keyPath: KeyPath<Storage, AsyncState<MockStrategy, [Key: Value], Status>>,
         key: Key,
         policy _: Void
     ) {
@@ -87,25 +87,23 @@ final class ApplyingStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<ApplyingStrategy, Value, Status>>,
         policy _: Void,
         current: Value
     ) {
-        guard let path = keyPath as? WritableKeyPath<Storage, Value> else { return }
         guard let value = "dark" as? Value else { return }
-        env.apply(value, keyPath: path)
+        env.apply(value, keyPath: keyPath)
     }
 
-    func onRead<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onRead<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<ApplyingStrategy, [Key: Value], Status>>,
         key: Key,
         policy _: Void,
         current: Value?
     ) {
-        guard let path = keyPath as? WritableKeyPath<Storage, [Key: Value]> else { return }
         guard let value = true as? Value else { return }
-        env.apply(value, keyPath: path, key: key)
+        env.apply(value, keyPath: keyPath, key: key)
     }
 }
 
@@ -140,8 +138,8 @@ final class NestedPerformStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<NestedPerformStrategy, Value, Status>>,
         policy _: Void,
         current: Value
     ) {
@@ -175,14 +173,14 @@ final class CrossApplyStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<CrossApplyStrategy, Value, Status>>,
         policy _: Void,
         current: Value
     ) {
         onReadCount += 1
         let value = onReadCount == 1 ? "dark" : "light"
-        env.apply(value, keyPath: \CrossApplyBox.theme)
+        env.apply(value, keyPath: \CrossApplyBox.$theme)
     }
 }
 
@@ -228,7 +226,7 @@ struct NestedWriteThenApplyThenWrite: SyncOperation {
     let strategyEnv: AsyncStrategyEnvironment
     func perform(in env: SyncOperationEnvironment) {
         env.write(1, keyPath: \NestedWriteBox.count)
-        strategyEnv.apply("dark", keyPath: \AsyncBox.theme)
+        strategyEnv.apply("dark", keyPath: \AsyncBox.$theme)
         env.write(2, keyPath: \NestedWriteBox.count)
     }
 }
@@ -358,7 +356,7 @@ struct AsyncStateApplyTests {
         value.expect(value: "system")
         status.expect(value: .pending)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
 
         value.expect(value: "dark")
         status.expect(value: .settled)
@@ -373,9 +371,9 @@ struct AsyncStateApplyTests {
 
         let value = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
         let status = ValueObserverProbe.watch(\AsyncBox.$theme.status, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
 
-        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.theme)
+        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
 
         value.expect(value: "dark")
         status.expect(value: .error(.boom))
@@ -388,9 +386,9 @@ struct AsyncStateApplyTests {
 
         let value = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
         let status = ValueObserverProbe.watch(\AsyncBox.$theme.status, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
 
-        strategy.env.restoreSeed(keyPath: \AsyncBox.theme)
+        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
 
         value.expect(value: "system")
         status.expect(value: .pending)
@@ -406,7 +404,7 @@ struct AsyncStateApplyTests {
         value.expect(value: nil)
         status.expect(value: .pending)
 
-        strategy.env.apply(Optional<String>.none, keyPath: \AsyncBox.profile)
+        strategy.env.apply(Optional<String>.none, keyPath: \AsyncBox.$profile)
 
         value.expect(value: nil)
         status.expect(value: .settled)
@@ -418,11 +416,11 @@ struct AsyncStateApplyTests {
         let strategy = env.installed(MockStrategy.self)
 
         let probe = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
-        strategy.env.restoreSeed(keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
         #expect(strategy.onReadCount == 1)
 
-        strategy.env.apply("light", keyPath: \AsyncBox.theme)
+        strategy.env.apply("light", keyPath: \AsyncBox.$theme)
         probe.expect(value: "light")
         #expect(strategy.onReadCount == 1)
     }
@@ -439,7 +437,7 @@ struct AsyncStateStaleTests {
         let probe = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
         #expect(strategy.onReadCount == 1)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
         probe.expect(value: "dark")
 
         _ = env.read(\AsyncBox.theme)
@@ -452,10 +450,10 @@ struct AsyncStateStaleTests {
         let strategy = env.installed(MockStrategy.self)
 
         let probe = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
         #expect(strategy.onReadCount == 1)
 
-        strategy.env.markStale(keyPath: \AsyncBox.theme)
+        strategy.env.markStale(keyPath: \AsyncBox.$theme)
         #expect(strategy.onReadCount == 2)
         probe.expect(value: "dark")
     }
@@ -466,10 +464,10 @@ struct AsyncStateStaleTests {
         let strategy = env.installed(MockStrategy.self)
 
         env.preheat(\AsyncBox.theme)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
         #expect(strategy.onReadCount == 1)
 
-        strategy.env.markStale(keyPath: \AsyncBox.theme)
+        strategy.env.markStale(keyPath: \AsyncBox.$theme)
         #expect(strategy.onReadCount == 1)
         #expect(env.read(\AsyncBox.theme) == "dark")
         #expect(strategy.onReadCount == 2)
@@ -482,10 +480,10 @@ struct AsyncStateStaleTests {
 
         let status = ValueObserverProbe.watch(\AsyncBox.$theme.status, in: env)
         _ = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
         status.expect(value: .settled)
 
-        strategy.env.markStale(keyPath: \AsyncBox.theme)
+        strategy.env.markStale(keyPath: \AsyncBox.$theme)
         status.expect(value: .settled)
     }
 }
@@ -503,7 +501,7 @@ struct AsyncStateKeyedTests {
         #expect(strategy.onReadCount == 0)
         status.expect(value: .pending)
 
-        strategy.env.apply(true, keyPath: \AsyncBox.done, key: "a")
+        strategy.env.apply(true, keyPath: \AsyncBox.$done, key: "a")
         status.expect(value: .settled)
 
         let value = ValueObserverProbe.watchKeyed(\AsyncBox.done, key: "a", in: env)
@@ -516,14 +514,14 @@ struct AsyncStateKeyedTests {
         let strategy = env.installed(MockStrategy.self)
 
         let status = ValueObserverProbe.watchKeyed(\AsyncBox.$done.status, key: "a", in: env)
-        strategy.env.apply(true, keyPath: \AsyncBox.done, key: "a")
+        strategy.env.apply(true, keyPath: \AsyncBox.$done, key: "a")
         status.expect(value: .settled)
 
-        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.done, key: "a")
+        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$done, key: "a")
         status.expect(value: .error(.boom))
         #expect(env.read(\AsyncBox.done, key: "a") == true)
 
-        strategy.env.restoreSeed(keyPath: \AsyncBox.done, key: "a")
+        strategy.env.restoreSeed(keyPath: \AsyncBox.$done, key: "a")
         status.expect(value: .pending)
         #expect(env.read(\AsyncBox.done, key: "a") == nil)
     }
@@ -537,8 +535,8 @@ struct AsyncStateKeyedTests {
         _ = ValueObserverProbe.watch(\AsyncBox.title, in: env)
 
         #expect(strategy.onReadCount == 2)
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
-        strategy.env.apply("Hello", keyPath: \AsyncBox.title)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply("Hello", keyPath: \AsyncBox.$title)
 
         #expect(env.read(\AsyncBox.theme) == "dark")
         #expect(env.read(\AsyncBox.title) == "Hello")
@@ -581,10 +579,10 @@ struct AsyncStateWriteTests {
         let strategy = env.installed(MockStrategy.self)
         env.preheat(\AsyncBox.theme)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.theme)
-        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.theme)
-        strategy.env.restoreSeed(keyPath: \AsyncBox.theme)
-        strategy.env.markStale(keyPath: \AsyncBox.theme)
+        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
+        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
+        strategy.env.markStale(keyPath: \AsyncBox.$theme)
 
         #expect(strategy.onWriteCount == 0)
     }
@@ -623,10 +621,10 @@ struct AsyncStateWriteTests {
         }
         env = nil
 
-        strategyEnv.apply("dark", keyPath: \AsyncBox.theme)
-        strategyEnv.fail(MockFailure.boom, keyPath: \AsyncBox.theme)
-        strategyEnv.restoreSeed(keyPath: \AsyncBox.theme)
-        strategyEnv.markStale(keyPath: \AsyncBox.theme)
+        strategyEnv.apply("dark", keyPath: \AsyncBox.$theme)
+        strategyEnv.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
+        strategyEnv.restoreSeed(keyPath: \AsyncBox.$theme)
+        strategyEnv.markStale(keyPath: \AsyncBox.$theme)
     }
 }
 
@@ -649,16 +647,16 @@ final class PolicyStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<PolicyStrategy, Value, Status>>,
         policy: ProbePolicy,
         current: Value
     ) {
         lastOnReadPolicy = policy
     }
 
-    func onRead<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onRead<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<PolicyStrategy, [Key: Value], Status>>,
         key: Key,
         policy: ProbePolicy,
         current: Value?
@@ -666,15 +664,15 @@ final class PolicyStrategy: AsyncStrategy {
         lastKeyedOnReadPolicy = policy
     }
 
-    func onDrop<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onDrop<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<PolicyStrategy, Value, Status>>,
         policy: ProbePolicy
     ) {
         lastOnDropPolicy = policy
     }
 
-    func onDrop<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onDrop<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<PolicyStrategy, [Key: Value], Status>>,
         key: Key,
         policy: ProbePolicy
     ) {
@@ -831,7 +829,7 @@ struct AsyncStateFirstReadTests {
         probe.expect(value: "dark")
         probe.expect(updates: 0)
 
-        strategy.env.apply("light", keyPath: \ApplyingBox.theme)
+        strategy.env.apply("light", keyPath: \ApplyingBox.$theme)
 
         probe.expect(value: "light")
         probe.expect(updates: 1)

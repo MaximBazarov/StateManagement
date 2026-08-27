@@ -4,6 +4,10 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ## [Unreleased]
 
+### Changed
+
+- Strategy kicks (`onRead` / `onWrite` / `onDrop`) and inbound verbs (`apply` / `fail` / `restoreSeed` / `markStale`) take the `$` Address. Pin `Self` on kicks. No `value: Any` on the handle or `finishAppWrite`. Watch and Operations keep the Value Address. Preheat stays Value-path. Guide `SRC-5` is Intake. 0.9.x break, no shim.
+
 ### Added
 
 - `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.

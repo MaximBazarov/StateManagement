@@ -156,7 +156,7 @@ import Foundation
                 storage[keyPath: keyPath] = newValue
             }
             if let handle = pendingHandle {
-                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: nil)
+                finishAppWrite(handle, value: newValue, keyPath: keyPath)
             }
             let valueID = ValueID(
                 keyPath: keyPath
@@ -210,7 +210,7 @@ import Foundation
                 storage[keyPath: keyPath][key] = newValue
             }
             if let handle = pendingHandle {
-                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: AnyHashable(key))
+                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: key)
             }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)

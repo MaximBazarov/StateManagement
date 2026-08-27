@@ -52,7 +52,7 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 
 ### AsyncStrategy
 
-An AsyncStrategy owns read, write, and external side effects for `@AsyncState`. Address names the Value. Policy on ``AsyncState`` is how that Address is backed; it is not a second Address.
+An AsyncStrategy owns read, write, and external side effects for `@AsyncState`. Strategy kicks and inbound verbs take the `$` Address. Watch and Operations keep the Value Address. Policy on ``AsyncState`` is how that Address is backed; it is not a second Address.
 
 - ``AsyncState``
 - ``AsyncStrategy``

@@ -40,9 +40,9 @@ extension SourceStatus: Equatable where Failure: Equatable {
 /// Owns read, write, and external side effects for `@AsyncState` Addresses.
 /// The Environment owns one instance per type and always holds the Value.
 ///
-/// ``onRead``, ``onWrite``, and ``onDrop`` take an Address and a Policy value. Address names the
-/// Value. Policy is how that Address is backed — a per-Address value stored on ``AsyncState``, not
-/// a second Address.
+/// ``onRead``, ``onWrite``, and ``onDrop`` take a `$` Address and a Policy value. The `$` Address
+/// names the `AsyncState` wrapper, not the Value. Policy is how that Address is backed — a
+/// per-Address value stored on ``AsyncState``, not a second Address.
 ///
 /// The sourced Address stays live until the Container drops. Kicks are synchronous and return
 /// nothing. Later inbound is ``AsyncStrategyEnvironment/apply(_:keyPath:)`` / `fail`.
@@ -60,45 +60,45 @@ public protocol AsyncStrategy: AnyObject {
 
     /// First read, `preheat`, or dirty only. `current` is the Value the Environment already holds.
     /// `policy` is the value stored on ``AsyncState`` for this Address.
-    func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy,
         current: Value
     )
 
     /// First read, `preheat`, or dirty only for one Keyed Address.
-    func onRead<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onRead<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy,
         current: Value?
     )
 
     /// After every app Sync write. The Value is already in the Environment, `.settled`.
-    func onWrite<Storage: StateContainer, Value>(
+    func onWrite<Storage: StateContainer, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, Value>,
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy
     )
 
     /// After every app Sync write to one Keyed Address.
-    func onWrite<Storage: StateContainer, Key: Hashable, Value>(
+    func onWrite<Storage: StateContainer, Key: Hashable, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy
     )
 
     /// The sourced Address died because this Address's Container dropped. Default is empty.
     /// `policy` is the same value ``onRead`` received.
-    func onDrop<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onDrop<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy
     )
 
     /// The sourced Address died because this keyed Address's Container dropped. Default is empty.
-    func onDrop<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    func onDrop<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy
     )
@@ -106,44 +106,44 @@ public protocol AsyncStrategy: AnyObject {
 
 extension AsyncStrategy {
     /// Default so a Keyed-only strategy can omit the Atomic overload.
-    public func onRead<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    public func onRead<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy,
         current: Value
     ) {}
 
     /// Default so an Atomic-only strategy can omit the Keyed overload.
-    public func onRead<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    public func onRead<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy,
         current: Value?
     ) {}
 
     /// Default so a Keyed-only strategy can omit the Atomic overload.
-    public func onWrite<Storage: StateContainer, Value>(
+    public func onWrite<Storage: StateContainer, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, Value>,
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy
     ) {}
 
     /// Default so an Atomic-only strategy can omit the Keyed overload.
-    public func onWrite<Storage: StateContainer, Key: Hashable, Value>(
+    public func onWrite<Storage: StateContainer, Key: Hashable, Value, Status>(
         _ value: Value,
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy
     ) {}
 
     /// Default so a Keyed-only strategy can omit the Atomic overload.
-    public func onDrop<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    public func onDrop<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, Value, Status>>,
         policy: Policy
     ) {}
 
     /// Default so an Atomic-only strategy can omit the Keyed overload.
-    public func onDrop<Storage: StateContainer, Key: Hashable, Value>(
-        _ keyPath: KeyPath<Storage, [Key: Value]>,
+    public func onDrop<Storage: StateContainer, Key: Hashable, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<Self, [Key: Value], Status>>,
         key: Key,
         policy: Policy
     ) {}
