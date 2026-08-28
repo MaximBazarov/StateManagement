@@ -32,20 +32,21 @@ public enum NoKey: Hashable {
 /// > Note The result is cached. The closure runs on the first read, then the value is reused until invalidated.
 /// Reading the same computed from many places in one update costs one computation.
 ///
-/// In the following simple example `count` and `itemLength`
-/// are automatically recomputed when `ListContainer.items` change and readers are notified.
+/// In the following example `count` recomputes when `items` change; `isDone`
+/// recomputes when that id's `done` flag changes.
 /// ```swift
 /// final class ListContainer: StateContainer {
 ///     var items: [UUID] = []
+///     var done: [UUID: Bool] = [:]
 ///
-///     // Atomic computed is equal to the count of the items.
+///     // Atomic computed: equal to the count of the items.
 ///     @Computed var count = { env in
 ///         env.getValue(\ListContainer.items).count
 ///     }
 ///
-///     // Keyed computed, is equal to the length of the item at provided id.
-///     @Computed<UUID, Bool> var itemLength = { env, key in
-///         env.getValue(\ListContainer.items, key: id).count
+///     // Keyed computed: derived per item id.
+///     @Computed<UUID, Bool> var isDone = { env, id in
+///         env.getValue(\ListContainer.done, key: id) ?? false
 ///     }
 /// }
 /// ```
@@ -82,17 +83,20 @@ public enum NoKey: Hashable {
     // MARK: - Read
 
     /// The single way any computed value is read, by ``Watch``, by ``EnvironmentService``, and by
-    /// other computeds (atomic and keyed alike). Subscribes `receiver` so the
-    /// consumer is notified when this value changes, then serves the cache: returns the stored output
-    /// if present, otherwise runs the closure once, stores the result, and returns it. The closure
-    /// re-registers its dependency edges and installs the hook that clears this cache entry when an
-    /// input changes, so a later cache hit is safe — it only happens while those edges still hold.
+    /// other computeds (atomic and keyed alike). Serves the cache first: returns the stored output
+    /// if present, otherwise runs the closure once, stores the result, and returns it. Then
+    /// subscribes `receiver` so the consumer is notified of later changes.
+    /// The closure re-registers its dependency edges and installs the hook that clears this cache
+    /// entry when an input changes, so a later cache hit is safe — it only happens while those
+    /// edges still hold.
     ///
     /// `evaluating` is the history of computeds currently mid-read, threaded down the recursion
     /// (top-level callers rely on the default). If this `valueID` is already in that history, the
     /// closure is about to read itself — a dependency cycle: the chain is reported through telemetry
     /// and then trapped. A cache hit returns before the check, so it can never recurse. See ADR 0004
     /// (composition) and ADR 0014 (cycle guard).
+    /// Subscribe after the Value is in hand so nested inbound during `onRead` does not notify this reader.
+    @_documentation(visibility: private)
     func read(
         env: SharedEnvironment,
         valueID: ValueID,
@@ -100,8 +104,8 @@ public enum NoKey: Hashable {
         key: Key,
         evaluating: [ValueID] = []
     ) -> Output {
-        env.observation.subscribe(receiver: receiver, valueID: valueID)
         if let cached = cache[key] {
+            env.observation.subscribe(receiver: receiver, valueID: valueID)
             return cached
         }
 
@@ -125,6 +129,7 @@ public enum NoKey: Hashable {
         )
         let value = wrappedValue(compEnv, key)
         cache[key] = value
+        env.observation.subscribe(receiver: receiver, valueID: valueID)
         return value
     }
 }

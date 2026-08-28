@@ -2,6 +2,22 @@
 
 All notable changes to StateManagement are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Pre-1.0, expect breaking changes between minor versions.
 
+## [Unreleased]
+
+### Changed
+
+- Strategy kicks (`onRead` / `onWrite` / `onDrop`) and inbound verbs (`apply` / `fail` / `restoreSeed` / `markStale`) take the `$` Address. Pin `Self` on kicks. No `value: Any` on the handle or `finishAppWrite`. Watch and Operations keep the Value Address. Preheat stays Value-path. 0.9.x break, no shim.
+
+### Added
+
+- `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.
+
+### Fixed
+
+- A synchronous first read that kicks `onRead` is not a receiver of nested `apply` / `fail`. The body already has the applied Value. Other already-subscribed receivers still notify.
+- Nested sync `perform` shares the original Operation. Observers see one notification with the final Value. Same-stack strategy inbound joins that round.
+- `@Perform` sends `objectWillChange` only after that instance's `isInProgress` has been read. Dispatch-only views do not re-render on `begin()` / `end()`. The send still hops.
+
 ## [0.9.2] - 2026-08-25
 
 ### Added

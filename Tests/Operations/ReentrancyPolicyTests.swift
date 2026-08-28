@@ -216,7 +216,7 @@ struct NewestWinsThenNest: AsyncOperation {
 
     func perform(in env: AsyncOperationEnvironment) async {
         await gate.holdHere()
-        env.perform(NestedChildAdd(amount: nestedAmount))
+        startWithoutWaiting(NestedChildAdd(amount: nestedAmount), on: env)
     }
 }
 

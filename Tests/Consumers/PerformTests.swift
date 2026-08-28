@@ -107,6 +107,21 @@ struct PerformAsyncFireAndForgetView: View {
     }
 }
 
+/// Dispatch-only: fire-and-forget with no `isInProgress` read. Body count
+/// proves `begin()` / `end()` do not invalidate a view that never asked.
+@MainActor
+struct PerformDispatchOnlyView: View {
+    let counter: RenderCounter
+    let operation: HoldThenMarkLoaded
+    @Perform var perform
+    var body: some View {
+        let _ = counter.count += 1
+        Color.clear.onAppear {
+            perform(operation)
+        }
+    }
+}
+
 /// Awaits an async operation from a `.task` modifier.
 @MainActor
 struct PerformAsyncAwaitView: View {
@@ -212,6 +227,34 @@ struct PerformTests {
 
         let landed = await waitUntil { reader.read(\PerformState.count) == 1 }
         #expect(landed, "sync operation did not mutate the resolved environment")
+    }
+
+    @Test("Dispatch-only Perform does not re-evaluate body on begin or end")
+    func dispatchOnlyDoesNotRerenderOnBeginOrEnd() async throws {
+        let env = SharedEnvironment()
+        let reader = await env.spawnService(StateReader.self)
+        let gate = HoldGate()
+        let counter = RenderCounter()
+
+        let host = HostedView.mount(
+            PerformDispatchOnlyView(
+                counter: counter,
+                operation: HoldThenMarkLoaded(gate: gate)
+            ).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        #expect(counter.count >= 1)
+        let initial = counter.count
+
+        await gate.waitForArrival()
+        host.relayout()
+        gate.release()
+        host.relayout()
+
+        let landed = await waitUntil { reader.read(\PerformState.loaded) }
+        #expect(landed, "gated fire-and-forget never landed")
+        #expect(counter.count == initial, "dispatch-only body re-evaluated on begin or end")
     }
 
     @Test("Async operation fire-and-forget lands eventually")

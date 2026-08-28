@@ -253,8 +253,8 @@ final class ResetStrategy: AsyncStrategy {
 
     init(env _: AsyncStrategyEnvironment) {}
 
-    func onDrop<Storage: StateContainer, Value>(
-        _ keyPath: KeyPath<Storage, Value>,
+    func onDrop<Storage: StateContainer, Value, Status>(
+        _ keyPath: KeyPath<Storage, AsyncState<ResetStrategy, Value, Status>>,
         policy _: Void
     ) {
         onDropCount += 1

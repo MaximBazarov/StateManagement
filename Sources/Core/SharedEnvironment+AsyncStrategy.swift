@@ -160,15 +160,37 @@ extension SharedEnvironment {
 
     func finishAppWrite<Storage: StateContainer, Value>(
         _ handle: any AsyncStateHandle,
-        value: Any, // Keyed writes pass the entry; keyPath's Value is the dictionary.
-        keyPath: KeyPath<Storage, Value>,
-        key: AnyHashable?
+        value: Value,
+        keyPath: KeyPath<Storage, Value>
     ) {
         if handle.statusKeyPath == keyPath {
             return
         }
-        let valueID = makeValueID(keyPath: keyPath, key: key)
-        let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: key)
+        let valueID = makeValueID(keyPath: keyPath, key: nil)
+        let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: nil)
+        record.didRead = true
+        record.dirty = false
+        handle.writeDeliver(value)
+        record.resumeWaiters(with: .inbound)
+        if let statusID = record.statusID {
+            observation.invalidateValue(at: statusID)
+        }
+        let strategy = handle.resolveStrategy(in: self)
+        handle.callOnWrite(strategy, value: value)
+    }
+
+    func finishAppWrite<Storage: StateContainer, Key: Hashable, Value>(
+        _ handle: any AsyncStateHandle,
+        value: Value,
+        keyPath: KeyPath<Storage, [Key: Value]>,
+        key: Key
+    ) {
+        if handle.statusKeyPath == keyPath {
+            return
+        }
+        let anyKey = AnyHashable(key)
+        let valueID = makeValueID(keyPath: keyPath, key: anyKey)
+        let record = record(for: handle, valueID: valueID, keyPath: keyPath, key: anyKey)
         record.didRead = true
         record.dirty = false
         handle.writeDeliver(value, key: key)
@@ -250,32 +272,36 @@ extension SharedEnvironment {
         record.handle.callOnRead(strategy, key: record.key)
     }
 
-    func applyStrategyApply<Storage: StateContainer, Value>(
+    func applyStrategyApply<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
         _ value: Value,
-        keyPath: KeyPath<Storage, Value>
+        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
-        record?.handle.writeDeliver(value, key: nil)
+        record?.handle.writeDeliver(value)
         record?.dirty = false
         record?.resumeWaiters(with: .inbound)
         notifyStrategy(record)
     }
 
-    func applyStrategyKeyedApply<Storage: StateContainer, Key: Hashable, Value>(
-        _ value: Value,
-        keyPath: KeyPath<Storage, [Key: Value]>,
-        key: AnyHashable
+    func applyStrategyKeyedApply<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
+        _ value: Value?,
+        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
+        key: Key
     ) {
-        let record = recordMatching(keyPath: keyPath, key: key)
-        record?.handle.writeDeliver(value, key: key)
+        let record = recordMatching(keyPath: keyPath, key: AnyHashable(key))
+        if let value {
+            record?.handle.writeDeliver(value, key: key)
+        } else {
+            record?.handle.writeKeyedSettled(key: key)
+        }
         record?.dirty = false
         record?.resumeWaiters(with: .inbound)
         notifyStrategy(record)
     }
 
-    func applyStrategyFail<Storage: StateContainer, Value>(
+    func applyStrategyFail<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
         _ error: any Error,
-        keyPath: KeyPath<Storage, Value>
+        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.handle.writeFail(error, key: nil)
@@ -286,13 +312,14 @@ extension SharedEnvironment {
         }
     }
 
-    func applyStrategyKeyedFail<Storage: StateContainer, Key: Hashable, Value>(
+    func applyStrategyKeyedFail<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
         _ error: any Error,
-        keyPath: KeyPath<Storage, [Key: Value]>,
-        key: AnyHashable
+        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
+        key: Key
     ) {
-        let record = recordMatching(keyPath: keyPath, key: key)
-        record?.handle.writeFail(error, key: key)
+        let anyKey = AnyHashable(key)
+        let record = recordMatching(keyPath: keyPath, key: anyKey)
+        record?.handle.writeFail(error, key: anyKey)
         record?.dirty = false
         record?.resumeWaiters(with: .inbound)
         if let statusID = record?.statusID {
@@ -300,8 +327,8 @@ extension SharedEnvironment {
         }
     }
 
-    func applyStrategyRestoreSeed<Storage: StateContainer, Value>(
-        keyPath: KeyPath<Storage, Value>
+    func applyStrategyRestoreSeed<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
+        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.handle.writeClear(key: nil)
@@ -309,18 +336,19 @@ extension SharedEnvironment {
         notifyStrategy(record)
     }
 
-    func applyStrategyKeyedRestoreSeed<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: KeyPath<Storage, [Key: Value]>,
-        key: AnyHashable
+    func applyStrategyKeyedRestoreSeed<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
+        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
+        key: Key
     ) {
-        let record = recordMatching(keyPath: keyPath, key: key)
-        record?.handle.writeClear(key: key)
+        let anyKey = AnyHashable(key)
+        let record = recordMatching(keyPath: keyPath, key: anyKey)
+        record?.handle.writeClear(key: anyKey)
         record?.dirty = false
         notifyStrategy(record)
     }
 
-    func applyStrategyMarkStale<Storage: StateContainer, Value>(
-        keyPath: KeyPath<Storage, Value>
+    func applyStrategyMarkStale<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
+        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
         let record = recordMatching(keyPath: keyPath, key: nil)
         record?.dirty = true
@@ -329,11 +357,11 @@ extension SharedEnvironment {
         }
     }
 
-    func applyStrategyKeyedMarkStale<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: KeyPath<Storage, [Key: Value]>,
-        key: AnyHashable
+    func applyStrategyKeyedMarkStale<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
+        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
+        key: Key
     ) {
-        let record = recordMatching(keyPath: keyPath, key: key)
+        let record = recordMatching(keyPath: keyPath, key: AnyHashable(key))
         record?.dirty = true
         if let sourcedID = record?.sourcedID {
             observation.invalidateValue(at: sourcedID)
@@ -366,7 +394,10 @@ extension SharedEnvironment {
     }
 
     private static func addressMatches(_ handle: any AsyncStateHandle, keyPath: AnyKeyPath) -> Bool {
-        handle.sourcedKeyPath == keyPath || handle.storageValueKeyPath == keyPath
+        handle.sourcedKeyPath == keyPath
+            || handle.storageValueKeyPath == keyPath
+            || handle.dollarKeyPath == keyPath
+            || handle.wrapperKeyPath == keyPath
     }
 
     private func notifyStrategy(_ record: StrategyRecord?) {
@@ -414,6 +445,8 @@ extension SharedEnvironment {
         record.handle.sourcedKeyPath is PartialKeyPath<Storage>
             || record.handle.statusKeyPath is PartialKeyPath<Storage>
             || record.handle.storageValueKeyPath is PartialKeyPath<Storage>
+            || record.handle.dollarKeyPath is PartialKeyPath<Storage>
+            || record.handle.wrapperKeyPath is PartialKeyPath<Storage>
     }
 
     private func endRecord(_ record: StrategyRecord) {

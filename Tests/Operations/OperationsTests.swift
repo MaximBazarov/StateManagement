@@ -61,7 +61,7 @@ struct CompositeAsyncOp: AsyncOperation {
         env.perform(SetItemOp(key: "x", value: 42))
 
         // Async child: fire-and-forget inside AsyncOperationEnvironment.
-        env.perform(AsyncIncrementOp())
+        startWithoutWaiting(AsyncIncrementOp(), on: env)
     }
 }
 
@@ -167,4 +167,15 @@ struct TouchServiceViaGetService: AsyncOperation {
         #expect(again === spawned)
         #expect(spawned.touched)
     }
+}
+
+/// Sync hop so `perform` resolves to fire-and-forget inside an async Operation body.
+@MainActor
+func startWithoutWaiting<Op: AsyncOperation>(
+    _ operation: Op,
+    on env: AsyncOperationEnvironment,
+    file: String = #fileID,
+    line: UInt = #line
+) {
+    env.perform(operation, file: file, line: line)
 }

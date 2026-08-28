@@ -37,13 +37,18 @@ protocol AsyncStateHandle: AnyObject {
     var sourcedKeyPath: AnyKeyPath? { get set }
     var statusKeyPath: AnyKeyPath? { get set }
     var storageValueKeyPath: AnyKeyPath? { get set }
+    var dollarKeyPath: AnyKeyPath? { get set }
+    var wrapperKeyPath: AnyKeyPath? { get set }
     var sourceTypeID: ObjectIdentifier { get }
 
     func resolveStrategy(in env: SharedEnvironment) -> any AsyncStrategy
     func callOnRead(_ strategy: any AsyncStrategy, key: AnyHashable?)
-    func callOnWrite(_ strategy: any AsyncStrategy, value: Any, key: AnyHashable?)
+    func callOnWrite<Value>(_ strategy: any AsyncStrategy, value: Value)
+    func callOnWrite<Key: Hashable, Output>(_ strategy: any AsyncStrategy, value: Output, key: Key)
     func callOnDrop(_ strategy: any AsyncStrategy, key: AnyHashable?)
-    func writeDeliver(_ value: Any, key: AnyHashable?)
+    func writeDeliver<Value>(_ value: Value)
+    func writeDeliver<Key: Hashable, Output>(_ value: Output, key: Key)
+    func writeKeyedSettled<Key: Hashable>(key: Key)
     func writeFail(_ error: any Error, key: AnyHashable?)
     func writeClear(key: AnyHashable?)
     func seedKeyedPending(key: AnyHashable?)
@@ -53,7 +58,7 @@ protocol AsyncStateHandle: AnyObject {
 /// Declares that an Atomic or Keyed Value is backed by an AsyncStrategy. `$property` is this wrapper, not a Value.
 ///
 /// Companion status is `$property.status`. First read of either Address, or `preheat`, calls
-/// ``AsyncStrategy/onRead(_:policy:current:)``. Policy is stored here and passed into `onRead`, `onWrite`, and `onDrop`.
+/// ``AsyncStrategy/onRead(_:policy:current:)`` with the `$` Address. Policy is stored here and passed into `onRead`, `onWrite`, and `onDrop`.
 @propertyWrapper
 @MainActor
 public final class AsyncState<S: AsyncStrategy, Value, Status> {
@@ -66,16 +71,81 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     var sourcedKeyPath: AnyKeyPath?
     var statusKeyPath: AnyKeyPath?
     var storageValueKeyPath: AnyKeyPath?
+    var dollarKeyPath: AnyKeyPath?
+    var wrapperKeyPath: AnyKeyPath?
     /// The Environment that read this Address. `refresh()` needs it, and the Environment
     /// owns the Container that owns this wrapper, so the reference is weak.
     weak var boundEnvironment: SharedEnvironment?
     var onReadOpener: ((S, AnyHashable?) -> Void)?
-    var onWriteOpener: ((S, Any, AnyHashable?) -> Void)?
+    var onWriteAtomic: ((S, Value) -> Void)?
     var onDropOpener: ((S, AnyHashable?) -> Void)?
-    var deliverWriter: ((Any, AnyHashable?) -> Void)?
     var failWriter: ((any Error, AnyHashable?) -> Void)?
     var clearWriter: ((AnyHashable?) -> Void)?
     var seedPending: ((AnyHashable?) -> Void)?
+    /// Typed keyed kick/inbound. Existential because `Key`/`Output` are the keyed init's generics.
+    private var keyedIO: KeyedIOBase?
+
+    /// Opens ValueID-stored keys onto the keyed init's `Key`.
+    private class KeyedIOBase {
+        func settle<CallKey: Hashable>(_ key: CallKey) {
+            preconditionFailure("AsyncStrategy settle on an unmatched keyed Address")
+        }
+        func write<CallKey: Hashable, Output>(_ strategy: S, value: Output, key: CallKey) {
+            preconditionFailure("AsyncStrategy onWrite type \(Output.self), expected keyed entry")
+        }
+        func deliver<CallKey: Hashable, Output>(_ value: Output, key: CallKey) {
+            preconditionFailure("AsyncStrategy apply type \(Output.self), expected keyed entry")
+        }
+    }
+
+    /// Atomic Value stays on `onWriteAtomic`. Keyed is Output + Key.
+    private final class KeyedIO<Key: Hashable, Output>: KeyedIOBase {
+        var writeOpener: ((S, Output, Key) -> Void)?
+        let deliverOpener: (Output, Key) -> Void
+        let settleKeyed: (Key) -> Void
+
+        init(deliver: @escaping (Output, Key) -> Void, settleKeyed: @escaping (Key) -> Void) {
+            self.deliverOpener = deliver
+            self.settleKeyed = settleKeyed
+        }
+
+        override func settle<CallKey: Hashable>(_ key: CallKey) {
+            guard let typedKey = key as? Key else {
+                preconditionFailure(
+                    "AsyncStrategy settle key type \(CallKey.self), expected \(Key.self)"
+                )
+            }
+            settleKeyed(typedKey)
+        }
+
+        override func write<CallKey: Hashable, CallOutput>(_ strategy: S, value: CallOutput, key: CallKey) {
+            guard let typedKey = key as? Key else {
+                preconditionFailure(
+                    "AsyncStrategy onWrite key type \(CallKey.self), expected \(Key.self)"
+                )
+            }
+            guard let typedValue = value as? Output else {
+                preconditionFailure(
+                    "AsyncStrategy onWrite type \(CallOutput.self), expected \(Output.self)"
+                )
+            }
+            writeOpener?(strategy, typedValue, typedKey)
+        }
+
+        override func deliver<CallKey: Hashable, CallOutput>(_ value: CallOutput, key: CallKey) {
+            guard let typedKey = key as? Key else {
+                preconditionFailure(
+                    "AsyncStrategy apply key type \(CallKey.self), expected \(Key.self)"
+                )
+            }
+            guard let typedValue = value as? Output else {
+                preconditionFailure(
+                    "AsyncStrategy apply type \(CallOutput.self), expected \(Output.self)"
+                )
+            }
+            deliverOpener(typedValue, typedKey)
+        }
+    }
 
     /// The wrapper itself. `$property` is this value, not the sourced Value.
     public var projectedValue: AsyncState { self }
@@ -145,9 +215,6 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
         self.policy = policy
         self.statusStorage = .pending
         self.isKeyed = false
-        self.deliverWriter = { [weak self] value, _ in
-            self?.writeAtomicDeliver(value)
-        }
         self.failWriter = { [weak self] error, _ in
             self?.writeAtomicFail(error)
         }
@@ -180,14 +247,15 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
         self.policy = policy
         self.statusStorage = [:]
         self.isKeyed = true
-        self.deliverWriter = { [weak self] value, key in
-            guard let self, let typedKey = key?.base as? Key else { return }
-            guard let typed = value as? Output else {
-                preconditionFailure("AsyncStrategy apply type \(type(of: value)), expected \(Output.self)")
+        self.keyedIO = KeyedIO<Key, Output>(
+            deliver: { [weak self] value, key in
+                self?.storage[key] = value
+                self?.statusStorage[key] = .settled
+            },
+            settleKeyed: { [weak self] key in
+                self?.statusStorage[key] = .settled
             }
-            self.storage[typedKey] = typed
-            self.statusStorage[typedKey] = .settled
-        }
+        )
         self.failWriter = { [weak self] error, key in
             guard let self, let typedKey = key?.base as? Key else { return }
             guard let typed = error as? S.Failure else {
@@ -216,23 +284,21 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     ) -> Value {
         get {
             let wrapper = instance[keyPath: storageKeyPath]
-            wrapper.sourcedKeyPath = wrappedKeyPath
-            wrapper.storageValueKeyPath = storageKeyPath.appending(path: \.storage)
-            wrapper.installOpeners(sourced: wrappedKeyPath)
+            wrapper.bindValuePath(wrappedKeyPath, storageKeyPath: storageKeyPath)
+            wrapper.installOpenersIfNeeded(dollar: storageKeyPath)
             SharedEnvironment.noteHandleRead(wrapper)
             return wrapper.storage
         }
         set {
             let wrapper = instance[keyPath: storageKeyPath]
-            wrapper.sourcedKeyPath = wrappedKeyPath
-            wrapper.storageValueKeyPath = storageKeyPath.appending(path: \.storage)
-            wrapper.installOpeners(sourced: wrappedKeyPath)
+            wrapper.bindValuePath(wrappedKeyPath, storageKeyPath: storageKeyPath)
+            wrapper.installOpenersIfNeeded(dollar: storageKeyPath)
             SharedEnvironment.noteHandleRead(wrapper)
             wrapper.storage = newValue
         }
     }
 
-    /// Reads `$property` through the enclosing Container. Status-first read still needs a writable Address for `apply`.
+    /// Reads `$property` through the enclosing Container.
     public static subscript<Storage: StateContainer>(
         _enclosingInstance instance: Storage,
         projected projectedKeyPath: KeyPath<Storage, AsyncState<S, Value, Status>>,
@@ -240,21 +306,39 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     ) -> AsyncState<S, Value, Status> {
         get {
             let wrapper = instance[keyPath: storageKeyPath]
-            wrapper.statusKeyPath = projectedKeyPath.appending(path: \.status)
-            let sourcedStorage = storageKeyPath.appending(path: \.storage)
-            wrapper.storageValueKeyPath = sourcedStorage
-            if wrapper.onReadOpener == nil {
-                // `$property.storage` is read-only; `_property.storage` is writable so `apply` can round-trip.
-                wrapper.installOpeners(sourced: sourcedStorage)
-            }
+            wrapper.bindDollarPath(projectedKeyPath, storageKeyPath: storageKeyPath)
+            wrapper.installOpenersIfNeeded(dollar: projectedKeyPath)
             SharedEnvironment.noteHandleRead(wrapper)
             return wrapper
         }
     }
 
-    private func installOpeners<Storage: StateContainer>(
-        sourced: KeyPath<Storage, Value>
+    private func bindValuePath<Storage: StateContainer>(
+        _ wrappedKeyPath: ReferenceWritableKeyPath<Storage, Value>,
+        storageKeyPath: ReferenceWritableKeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
+        sourcedKeyPath = wrappedKeyPath
+        storageValueKeyPath = storageKeyPath.appending(path: \.storage)
+        wrapperKeyPath = storageKeyPath
+    }
+
+    private func bindDollarPath<Storage: StateContainer>(
+        _ projectedKeyPath: KeyPath<Storage, AsyncState<S, Value, Status>>,
+        storageKeyPath: ReferenceWritableKeyPath<Storage, AsyncState<S, Value, Status>>
+    ) {
+        statusKeyPath = projectedKeyPath.appending(path: \.status)
+        storageValueKeyPath = storageKeyPath.appending(path: \.storage)
+        wrapperKeyPath = storageKeyPath
+        dollarKeyPath = projectedKeyPath
+    }
+
+    private func installOpenersIfNeeded<Storage: StateContainer>(
+        dollar: KeyPath<Storage, AsyncState<S, Value, Status>>
+    ) {
+        if dollarKeyPath == nil {
+            dollarKeyPath = dollar
+        }
+        guard onReadOpener == nil else { return }
         let policy = self.policy
         onReadOpener = { [weak self] strategy, key in
             guard let self else { return }
@@ -262,42 +346,51 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
                 Self.onReadKeyedDictionary(
                     dictType,
                     strategy: strategy,
-                    sourced: sourced,
+                    dollar: dollar,
                     key: key,
                     policy: policy,
                     current: self.storage
                 )
                 return
             }
-            strategy.onRead(sourced, policy: policy, current: self.storage)
+            strategy.onRead(dollar, policy: policy, current: self.storage)
         }
-        onWriteOpener = { strategy, value, key in
-            if let key, let dictType = Value.self as? any AsyncStateDictionary.Type {
-                Self.onWriteKeyedDictionary(
-                    dictType,
-                    strategy: strategy,
-                    sourced: sourced,
-                    key: key,
-                    policy: policy,
-                    value: value
-                )
-                return
-            }
-            guard let typed = value as? Value else { return }
-            strategy.onWrite(typed, sourced, policy: policy)
+        onWriteAtomic = { strategy, value in
+            strategy.onWrite(value, dollar, policy: policy)
+        }
+        if let dictType = Value.self as? any AsyncStateDictionary.Type {
+            installKeyedOpeners(dictType, dollar: dollar, policy: policy)
         }
         onDropOpener = { strategy, key in
             if let key, let dictType = Value.self as? any AsyncStateDictionary.Type {
                 Self.onDropKeyedDictionary(
                     dictType,
                     strategy: strategy,
-                    sourced: sourced,
+                    dollar: dollar,
                     key: key,
                     policy: policy
                 )
                 return
             }
-            strategy.onDrop(sourced, policy: policy)
+            strategy.onDrop(dollar, policy: policy)
+        }
+    }
+
+    /// Opens `Value` as `[Key: Output]` so keyed kicks are not lost to overload resolution.
+    private func installKeyedOpeners<Storage: StateContainer, D: AsyncStateDictionary>(
+        _ type: D.Type,
+        dollar: KeyPath<Storage, AsyncState<S, Value, Status>>,
+        policy: S.Policy
+    ) {
+        guard let io = keyedIO as? KeyedIO<D.DictKey, D.DictOutput> else { return }
+        // AsyncState specializations are invariant, so a direct `as?` is diagnosed as always
+        // failing. `Any` makes this a runtime check; Value is that dictionary when Keyed.
+        guard let dictPath = dollar as Any as? KeyPath<
+            Storage,
+            AsyncState<S, [D.DictKey: D.DictOutput], Status>
+        > else { return }
+        io.writeOpener = { strategy, value, key in
+            strategy.onWrite(value, dictPath, key: key, policy: policy)
         }
     }
 
@@ -305,15 +398,17 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     private static func onDropKeyedDictionary<Storage: StateContainer, D: AsyncStateDictionary>(
         _ type: D.Type,
         strategy: S,
-        sourced: KeyPath<Storage, Value>,
+        dollar: KeyPath<Storage, AsyncState<S, Value, Status>>,
         key: AnyHashable,
         policy: S.Policy
     ) {
         guard let typedKey = key.base as? D.DictKey else { return }
-        guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
-            strategy.onDrop(sourced, policy: policy)
-            return
-        }
+        // AsyncState specializations are invariant, so a direct `as?` is diagnosed as always
+        // failing. `Any` makes this a runtime check; Value is that dictionary when Keyed.
+        guard let dictPath = dollar as Any as? KeyPath<
+            Storage,
+            AsyncState<S, [D.DictKey: D.DictOutput], Status>
+        > else { return }
         strategy.onDrop(dictPath, key: typedKey, policy: policy)
     }
 
@@ -321,44 +416,22 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     private static func onReadKeyedDictionary<Storage: StateContainer, D: AsyncStateDictionary>(
         _ type: D.Type,
         strategy: S,
-        sourced: KeyPath<Storage, Value>,
+        dollar: KeyPath<Storage, AsyncState<S, Value, Status>>,
         key: AnyHashable,
         policy: S.Policy,
         current: Value
     ) {
         guard let typedKey = key.base as? D.DictKey else { return }
-        guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
-            strategy.onRead(sourced, policy: policy, current: current)
-            return
-        }
+        guard let dictPath = dollar as Any as? KeyPath<
+            Storage,
+            AsyncState<S, [D.DictKey: D.DictOutput], Status>
+        > else { return }
         let entry = (current as? [D.DictKey: D.DictOutput])?[typedKey]
         strategy.onRead(dictPath, key: typedKey, policy: policy, current: entry)
     }
 
-    /// Opens `Value` as `[Key: Output]` so keyed `onWrite` is not lost to overload resolution.
-    private static func onWriteKeyedDictionary<Storage: StateContainer, D: AsyncStateDictionary>(
-        _ type: D.Type,
-        strategy: S,
-        sourced: KeyPath<Storage, Value>,
-        key: AnyHashable,
-        policy: S.Policy,
-        value: Any
-    ) {
-        guard let typedKey = key.base as? D.DictKey else { return }
-        guard let dictPath = sourced as? KeyPath<Storage, [D.DictKey: D.DictOutput]> else {
-            guard let typed = value as? Value else { return }
-            strategy.onWrite(typed, sourced, policy: policy)
-            return
-        }
-        guard let typed = value as? D.DictOutput else { return }
-        strategy.onWrite(typed, dictPath, key: typedKey, policy: policy)
-    }
-
-    private func writeAtomicDeliver(_ value: Any) {
-        guard let typed = value as? Value else {
-            preconditionFailure("AsyncStrategy apply type \(type(of: value)), expected \(Value.self)")
-        }
-        storage = typed
+    private func writeAtomicDeliver(_ value: Value) {
+        storage = value
         if let next = SourceStatus<S.Failure>.settled as? Status {
             statusStorage = next
         }
@@ -393,9 +466,19 @@ extension AsyncState: AsyncStateHandle {
         onReadOpener?(typed, key)
     }
 
-    func callOnWrite(_ strategy: any AsyncStrategy, value: Any, key: AnyHashable?) {
+    func callOnWrite<Written>(_ strategy: any AsyncStrategy, value: Written) {
         guard let typed = strategy as? S else { return }
-        onWriteOpener?(typed, value, key)
+        guard let typedValue = value as? Value else {
+            preconditionFailure(
+                "AsyncStrategy onWrite type \(type(of: value)), expected \(Value.self)"
+            )
+        }
+        onWriteAtomic?(typed, typedValue)
+    }
+
+    func callOnWrite<Key: Hashable, Output>(_ strategy: any AsyncStrategy, value: Output, key: Key) {
+        guard let typed = strategy as? S else { return }
+        keyedIO?.write(typed, value: value, key: key)
     }
 
     func callOnDrop(_ strategy: any AsyncStrategy, key: AnyHashable?) {
@@ -403,8 +486,21 @@ extension AsyncState: AsyncStateHandle {
         onDropOpener?(typed, key)
     }
 
-    func writeDeliver(_ value: Any, key: AnyHashable?) {
-        deliverWriter?(value, key)
+    func writeDeliver<Delivered>(_ value: Delivered) {
+        guard let typed = value as? Value else {
+            preconditionFailure(
+                "AsyncStrategy apply type \(type(of: value)), expected \(Value.self)"
+            )
+        }
+        writeAtomicDeliver(typed)
+    }
+
+    func writeDeliver<Key: Hashable, Output>(_ value: Output, key: Key) {
+        keyedIO?.deliver(value, key: key)
+    }
+
+    func writeKeyedSettled<Key: Hashable>(key: Key) {
+        keyedIO?.settle(key)
     }
 
     func writeFail(_ error: any Error, key: AnyHashable?) {
