@@ -29,8 +29,8 @@ final class OpTestState: StateContainer {
 
 struct IncrementOp: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let c = env.read(keyPath: \OpTestState.counter)
-        env.write(c + 1, keyPath: \OpTestState.counter)
+        let c = env.read(\OpTestState.counter)
+        env.write(\OpTestState.counter, value: c + 1)
     }
 }
 
@@ -38,7 +38,7 @@ struct SetItemOp: SyncOperation {
     let key: String
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \OpTestState.items, key: key)
+        env.write(\OpTestState.items, key: key, value: value)
     }
 }
 
@@ -54,8 +54,8 @@ struct CompositeAsyncOp: AsyncOperation {
     var reentrancy: ReentrancyDecision { .runAll }
     func perform(in env: AsyncOperationEnvironment) async {
         // Exercise both read overloads to prove they compile and return current state.
-        let _ = env.read(keyPath: \OpTestState.counter)
-        let _ = env.read(keyPath: \OpTestState.items, key: "x")
+        let _ = env.read(\OpTestState.counter)
+        let _ = env.read(\OpTestState.items, key: "x")
 
         // Sync child: immediate mutation.
         env.perform(SetItemOp(key: "x", value: 42))

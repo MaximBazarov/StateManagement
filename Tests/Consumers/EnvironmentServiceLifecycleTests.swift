@@ -27,7 +27,7 @@ final class LifecycleCounter: StateContainer {
 struct SetLifecycleX: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \LifecycleCounter.x)
+        env.write(\LifecycleCounter.x, value: value)
     }
 }
 
@@ -41,7 +41,7 @@ final class SetupProbeService: EnvironmentService {
 
     override func serve() async {
         isSetupLog.append(isSetup)
-        _ = getValue(\LifecycleCounter.x)
+        _ = read(\LifecycleCounter.x)
         await waiter.resume()
     }
 }
@@ -55,26 +55,31 @@ final class ReadOnceService: EnvironmentService {
 
     override func serve() async {
         if isSetup {
-            _ = getValue(\LifecycleCounter.x)
+            _ = read(\LifecycleCounter.x)
         }
         serveCount += 1
         await waiter.resume()
     }
 }
 
-/// Reads `x`, then on any non-setup serve writes `x + 1` once. The write is the
-/// service's own, so it must not trigger another serve.
+/// Reads `x`, then performs an Operation writing `x + 1` exactly once.
+///
+/// A Service hears the change it causes, so `hasWritten` is what stops the loop. `wasUpdated`
+/// cannot: it reports that `x` changed, not who changed it, so it stays true on the notify this
+/// Service triggered.
 @MainActor
 final class SelfWriteService: EnvironmentService {
     var serveCount = 0
     var waiter = Waiter(expectedCount: 1)
+    private var hasWritten = false
 
     override func serve() async {
-        let current = getValue(\LifecycleCounter.x)
+        let current = read(\LifecycleCounter.x)
         serveCount += 1
         await waiter.resume()
-        if !isSetup {
-            setValue(current + 1, keyPath: \LifecycleCounter.x)
+        if !isSetup, !hasWritten {
+            hasWritten = true
+            perform(SetLifecycleX(value: current + 1))
         }
     }
 }

@@ -19,8 +19,8 @@ One isolated owner of all state. Production, a preview, and a test each have the
 _Avoid_: store, warehouse, DI container, shared environment (as a second concept)
 
 **Restricted Environment**:
-The narrowed surface onto the Environment that non-view code holds: one each for a Sync operation, an Async operation, a Computed, and an AsyncStrategy, plus the base a Service inherits. It carries the identity of the caller, so a read through it is a declared dependency.
-_Avoid_: proxy environment, child environment, sub-environment, and using this for Watch
+The narrowed surface onto the Environment that non-view code holds: one each for a Sync operation, an Async operation, a Computed, and an AsyncStrategy, plus the base a Service inherits. It carries the identity of the caller, so every read has a known reader.
+_Avoid_: proxy environment, child environment, sub-environment, using this for Watch, and treating every read through it as a subscription
 
 **Container**:
 A named slice of application state. An Environment owns exactly one instance of each type. Containers do not nest. Types may nest inside a Value.
@@ -130,8 +130,8 @@ A SwiftUI view's declared dependency on a Value.
 _Avoid_: observer, subscriber, binding, UIKit Watch
 
 **Service**:
-Long-lived non-view logic that reacts to Values it read. Data flows out, never in.
-_Avoid_: observer, subscriber, reactor, and using Service for inbound or persist-out (that is an AsyncStrategy)
+Long-lived non-view logic that reacts to Values it read, and causes a change only by performing an Operation. Data flows out, never in.
+_Avoid_: observer, subscriber, reactor, using Service for inbound or persist-out (that is an AsyncStrategy), and a Service that writes State directly
 
 ### Around the library
 

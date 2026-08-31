@@ -40,23 +40,23 @@ final class ChainState: StateContainer {
 
     @Computed var levelA = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.a += 1
-        return env.getValue(\ChainState.input) + 1
+        return env.read(\ChainState.input) + 1
     }
 
     @Computed var levelB = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.b += 1
-        return env.getValue(\ChainState.$levelA) + 1
+        return env.read(\ChainState.$levelA) + 1
     }
 
     @Computed var levelC = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.c += 1
-        return env.getValue(\ChainState.$levelB) + 1
+        return env.read(\ChainState.$levelB) + 1
     }
 }
 
 struct BumpInput: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \ChainState.input) + 1, keyPath: \ChainState.input)
+        env.write(\ChainState.input, value: env.read(\ChainState.input) + 1)
     }
 }
 
@@ -69,23 +69,23 @@ final class DiamondState: StateContainer {
 
     @Computed var da = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.a += 1
-        return env.getValue(\DiamondState.x) + 1
+        return env.read(\DiamondState.x) + 1
     }
 
     @Computed var db = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.b += 1
-        return env.getValue(\DiamondState.x) + 2
+        return env.read(\DiamondState.x) + 2
     }
 
     @Computed var dc = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.c += 1
-        return env.getValue(\DiamondState.$da) + env.getValue(\DiamondState.$db)
+        return env.read(\DiamondState.$da) + env.read(\DiamondState.$db)
     }
 }
 
 struct BumpX: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \DiamondState.x) + 1, keyPath: \DiamondState.x)
+        env.write(\DiamondState.x, value: env.read(\DiamondState.x) + 1)
     }
 }
 
@@ -99,23 +99,23 @@ final class SelectiveState: StateContainer {
 
     @Computed var sa = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.a += 1
-        return env.getValue(\SelectiveState.p) + 1
+        return env.read(\SelectiveState.p) + 1
     }
 
     @Computed var sb = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.b += 1
-        return env.getValue(\SelectiveState.q) + 1
+        return env.read(\SelectiveState.q) + 1
     }
 
     @Computed var sc = { (env: ComputationEnvironment) -> Int in
         CompositionProbe.c += 1
-        return env.getValue(\SelectiveState.$sa) + env.getValue(\SelectiveState.$sb)
+        return env.read(\SelectiveState.$sa) + env.read(\SelectiveState.$sb)
     }
 }
 
 struct BumpP: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \SelectiveState.p) + 1, keyPath: \SelectiveState.p)
+        env.write(\SelectiveState.p, value: env.read(\SelectiveState.p) + 1)
     }
 }
 
@@ -128,12 +128,12 @@ final class KeyedCompState: StateContainer {
 
     @Computed var inner = { (env: ComputationEnvironment, key: Int) -> Int in
         CompositionProbe.a += 1
-        return (env.getValue(\KeyedCompState.raw, key: key) ?? 0) + 1
+        return (env.read(\KeyedCompState.raw, key: key) ?? 0) + 1
     }
 
     @Computed var outer = { (env: ComputationEnvironment, key: Int) -> Int in
         CompositionProbe.b += 1
-        return env.getValue(\KeyedCompState.$inner, key: key) + 100
+        return env.read(\KeyedCompState.$inner, key: key) + 100
     }
 }
 
@@ -141,9 +141,9 @@ struct BumpRawKey: SyncOperation {
     let key: Int
     func perform(in env: SyncOperationEnvironment) {
         env.write(
-            (env.read(keyPath: \KeyedCompState.raw, key: key) ?? 0) + 1,
-            keyPath: \KeyedCompState.raw,
-            key: key
+            \KeyedCompState.raw,
+            key: key,
+            value: (env.read(\KeyedCompState.raw, key: key) ?? 0) + 1
         )
     }
 }

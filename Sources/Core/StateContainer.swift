@@ -56,12 +56,12 @@ import Foundation
 ///
 ///     // Atomic computed: derived from `items`.
 ///     @Computed var count = { env in
-///         env.getValue(\TodoContainer.items).count
+///         env.read(\TodoContainer.items).count
 ///     }
 ///
 ///     // Keyed computed: derived per item id.
 ///     @Computed<UUID, Bool> var isDone = { env, id in
-///         env.getValue(\TodoContainer.done, key: id) ?? false
+///         env.read(\TodoContainer.done, key: id) ?? false
 ///     }
 /// }
 /// ```
@@ -74,7 +74,7 @@ import Foundation
 ///
 ///     @Watch(\TodoContainer.title) var title             // atomic
 ///     @Watch(\TodoContainer.done, key: id) var done      // keyed → Bool?
-///     @Watch(computed: \TodoContainer.count) var count   // atomic computed
+///     @Watch(\TodoContainer.count) var count             // atomic computed
 ///     @Watch(\TodoContainer.isDone, key: id) var isDone  // keyed computed
 ///
 ///     var body: some View { Text(title) }
@@ -88,7 +88,7 @@ import Foundation
 /// struct MarkDone: SyncOperation {
 ///     let id: UUID
 ///     func perform(in env: SyncOperationEnvironment) {
-///         env.write(true, keyPath: \TodoContainer.done, key: id)   // keyed write
+///         env.write(\TodoContainer.done, key: id, value: true)     // keyed write
 ///     }
 /// }
 /// ```

@@ -29,7 +29,7 @@ final class AAState: StateContainer {
 struct AASetX: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \AAState.x)
+        env.write(\AAState.x, value: value)
     }
 }
 
@@ -70,7 +70,7 @@ struct AAAwaitChildThenIncrement: AsyncOperation {
     let childValue: Int
     func perform(in env: AsyncOperationEnvironment) async {
         await env.perform(AAHoldThenSet(gate: gate, value: childValue))
-        let current = env.read(keyPath: \AAState.x)
+        let current = env.read(\AAState.x)
         env.perform(AASetX(value: current + 1))
     }
 }

@@ -24,11 +24,11 @@ final class SvcTestState: StateContainer {
     var dict: [String: String] = [:]
 
     @Computed var scaled = { (env: ComputationEnvironment) -> Int in
-        env.getValue(\SvcTestState.count) * 10
+        env.read(\SvcTestState.count) * 10
     }
 
     @Computed var keyed = { (env: ComputationEnvironment, key: String) -> Int in
-        env.getValue(\SvcTestState.count) + key.count
+        env.read(\SvcTestState.count) + key.count
     }
 }
 
@@ -37,7 +37,7 @@ final class SvcTestState: StateContainer {
 struct SetCount: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \SvcTestState.count)
+        env.write(\SvcTestState.count, value: value)
     }
 }
 
@@ -45,7 +45,7 @@ struct SetDictEntry: SyncOperation {
     let key: String
     let value: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \SvcTestState.dict, key: key)
+        env.write(\SvcTestState.dict, key: key, value: value)
     }
 }
 
@@ -72,10 +72,10 @@ final class TrackingService: EnvironmentService {
 
     override func serve() async {
         // Read values (subscribes the service to changes)
-        lastCount = getValue(\SvcTestState.count)
-        lastDictValue = getValue(keyPath: \SvcTestState.dict, key: "a")
-        lastComputed = getValue(\SvcTestState.$scaled)
-        lastKeyedComputed = getValue(\SvcTestState.$keyed, key: "myKey")
+        lastCount = read(\SvcTestState.count)
+        lastDictValue = read(\SvcTestState.dict, key: "a")
+        lastComputed = read(\SvcTestState.$scaled)
+        lastKeyedComputed = read(\SvcTestState.$keyed, key: "myKey")
 
         // Capture wasUpdated results before they are cleared
         countUpdated = wasUpdated(\SvcTestState.count)
@@ -151,13 +151,12 @@ struct ServiceAutoSubscribeTests {
         try await service.waiter.wait()
         #expect(service.lastDictValue == "hello")
 
-        // Write from the service itself (uses EnvironmentService.setValue)
+        // Write from the service itself, which it can only do by performing an Operation.
         service.waiter = Waiter(expectedCount: 1)
-        service.setValue("world", keyPath: \SvcTestState.dict, key: "a")
+        service.perform(SetDictEntry(key: "a", value: "world"))
         try await service.waiter.wait()
 
-        // The service mutated the value itself, so the notification is ignored.
-        // But auto-resubscribe keeps it alive, and the value was written.
+        // The Service hears the change it caused, like any other reader, and the value landed.
         let reader = await env.spawnService(StateReader.self)
         let stored = reader.read(\SvcTestState.dict, key: "a")
         #expect(stored == "world")
@@ -201,10 +200,10 @@ struct ServiceAutoSubscribeTests {
 
         let reader = await env.spawnService(StateReader.self)
 
-        let atomicComputed: Int = reader.read(computed: \SvcTestState.$scaled)
+        let atomicComputed: Int = reader.read(\SvcTestState.$scaled)
         #expect(atomicComputed == 50) // 5 * 10
 
-        let keyedComputed: Int = reader.read(computed: \SvcTestState.$keyed, key: "hi")
+        let keyedComputed: Int = reader.read(\SvcTestState.$keyed, key: "hi")
         #expect(keyedComputed == 7) // 5 + len("hi") = 5 + 2
     }
 }

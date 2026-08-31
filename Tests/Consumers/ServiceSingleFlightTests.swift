@@ -27,7 +27,7 @@ final class SingleFlightState: StateContainer {
 struct SetSingleFlightValue: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \SingleFlightState.value)
+        env.write(\SingleFlightState.value, value: value)
     }
 }
 
@@ -84,7 +84,7 @@ final class SlowWorkService: EnvironmentService {
         maxConcurrent = max(maxConcurrent, concurrent)
         runCount += 1
 
-        let value = getValue(\SingleFlightState.value)
+        let value = read(\SingleFlightState.value)
         startedValues.append(value)
 
         if workBlocksUntilFinished {
@@ -124,19 +124,21 @@ final class SlowWorkService: EnvironmentService {
     }
 }
 
-/// Writes `value + 1` on any non-setup run. The write is its own, so it must not
-/// drive another run.
+/// Performs an Operation writing `value + 1` exactly once. `hasWritten` is the author's guard: a
+/// Service hears the change it causes, so writing on every non-setup run would never settle.
 @MainActor
 final class SingleFlightSelfWriteService: EnvironmentService {
     private(set) var runCount = 0
     var waiter = Waiter(expectedCount: 1)
+    private var hasWritten = false
 
     override func serve() async {
-        let current = getValue(\SingleFlightState.value)
+        let current = read(\SingleFlightState.value)
         runCount += 1
         await waiter.resume()
-        if !isSetup {
-            setValue(current + 1, keyPath: \SingleFlightState.value)
+        if !isSetup, !hasWritten {
+            hasWritten = true
+            perform(SetSingleFlightValue(value: current + 1))
         }
     }
 }

@@ -22,8 +22,8 @@ final class ServicePerformBox: StateContainer {
 
 struct ServiceIncrement: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let current = env.read(keyPath: \ServicePerformBox.count)
-        env.write(current + 1, keyPath: \ServicePerformBox.count)
+        let current = env.read(\ServicePerformBox.count)
+        env.write(\ServicePerformBox.count, value: current + 1)
     }
 }
 

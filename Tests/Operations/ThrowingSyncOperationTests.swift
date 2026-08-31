@@ -28,20 +28,20 @@ final class ThrowSyncState: StateContainer {
 
 struct WriteThenThrow: ThrowingSyncOperation {
     func perform(in env: SyncOperationEnvironment) throws(ThrowSyncError) {
-        env.write(1, keyPath: \ThrowSyncState.count)
+        env.write(\ThrowSyncState.count, value: 1)
         throw .boom
     }
 }
 
 struct WriteOther: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(1, keyPath: \ThrowSyncState.other)
+        env.write(\ThrowSyncState.other, value: 1)
     }
 }
 
 struct NestedThenThrow: ThrowingSyncOperation {
     func perform(in env: SyncOperationEnvironment) throws(ThrowSyncError) {
-        env.write(1, keyPath: \ThrowSyncState.count)
+        env.write(\ThrowSyncState.count, value: 1)
         env.perform(WriteOther())
         throw .boom
     }
@@ -50,7 +50,7 @@ struct NestedThenThrow: ThrowingSyncOperation {
 struct WriteCount: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \ThrowSyncState.count)
+        env.write(\ThrowSyncState.count, value: value)
     }
 }
 

@@ -14,7 +14,7 @@
 
 import Foundation
 import Testing
-import StateManagement
+@testable import StateManagement
 
 @MainActor
 final class HoldGate {

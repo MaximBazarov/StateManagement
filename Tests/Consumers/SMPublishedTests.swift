@@ -24,14 +24,14 @@ final class SMPublishedBox: StateContainer, ObservableObject {
     var localNote = ""
 
     @Computed var doubled = { (env: ComputationEnvironment) -> Int in
-        env.getValue(\SMPublishedBox.thisValue) * 2
+        env.read(\SMPublishedBox.thisValue) * 2
     }
 }
 
 struct SetSMPublishedValue: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \SMPublishedBox.thisValue)
+        env.write(\SMPublishedBox.thisValue, value: value)
     }
 }
 
@@ -39,14 +39,14 @@ struct SetSMPublishedItem: SyncOperation {
     let key: String
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \SMPublishedBox.items, key: key)
+        env.write(\SMPublishedBox.items, key: key, value: value)
     }
 }
 
 struct RemoveSMPublishedItem: SyncOperation {
     let key: String
     func perform(in env: SyncOperationEnvironment) {
-        env.remove(keyPath: \SMPublishedBox.items, key: key)
+        env.remove(\SMPublishedBox.items, key: key)
     }
 }
 

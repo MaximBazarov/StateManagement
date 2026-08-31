@@ -32,7 +32,7 @@ final class IsoOther: StateContainer {
 struct IsoSetX: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \IsoState.x)
+        env.write(\IsoState.x, value: value)
     }
 }
 

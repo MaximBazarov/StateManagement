@@ -42,10 +42,10 @@ extension EnvironmentService {
         updatedValues.contains(ValueID(keyPath: valueKeyPath, key: key))
     }
 
-    // MARK: - GET
+    // MARK: - Read
 
     /// Reads an atomic ``Computed`` value at given path.
-    public func getValue<Storage: StateContainer, Output>(
+    public func read<Storage: StateContainer, Output>(
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         let valueID = ValueID(keyPath: keyPath)
@@ -54,7 +54,7 @@ extension EnvironmentService {
     }
 
     /// Reads a keyed ``Computed`` value at given path for `key`.
-    public func getValue<
+    public func read<
         Storage: StateContainer,
         Key: Hashable,
         Output

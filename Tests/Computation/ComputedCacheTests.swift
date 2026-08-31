@@ -38,54 +38,54 @@ final class CachedState: StateContainer {
 
     @Computed var doubled = { (env: ComputationEnvironment) -> Int in
         RecomputeProbe.atomic += 1
-        return env.getValue(\CachedState.a) * 2
+        return env.read(\CachedState.a) * 2
     }
 
     // Reads two inputs: one operation mutating both must still recompute it only once.
     @Computed var sum = { (env: ComputationEnvironment) -> Int in
         RecomputeProbe.sum += 1
-        return env.getValue(\CachedState.a) + env.getValue(\CachedState.b)
+        return env.read(\CachedState.a) + env.read(\CachedState.b)
     }
 
     // Reads only the value at its own key; another key's change must not recompute.
     var byKey: [Int: Int] = [1: 10, 2: 20]
     @Computed var fromKey = { (env: ComputationEnvironment, key: Int) -> Int in
         RecomputeProbe.keyed += 1
-        return (env.getValue(\CachedState.byKey, key: key) ?? 0) + 1
+        return (env.read(\CachedState.byKey, key: key) ?? 0) + 1
     }
 }
 
 struct BumpA: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \CachedState.a) + 1, keyPath: \CachedState.a)
+        env.write(\CachedState.a, value: env.read(\CachedState.a) + 1)
     }
 }
 
 struct BumpUnrelated: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \CachedState.unrelated) + 1, keyPath: \CachedState.unrelated)
+        env.write(\CachedState.unrelated, value: env.read(\CachedState.unrelated) + 1)
     }
 }
 
 struct BumpKey: SyncOperation {
     let key: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write((env.read(keyPath: \CachedState.byKey, key: key) ?? 0) + 1, keyPath: \CachedState.byKey, key: key)
+        env.write(\CachedState.byKey, key: key, value: (env.read(\CachedState.byKey, key: key) ?? 0) + 1)
     }
 }
 
 /// One operation mutating both inputs of `sum` — must collapse to a single recompute.
 struct BumpAB: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \CachedState.a) + 1, keyPath: \CachedState.a)
-        env.write(env.read(keyPath: \CachedState.b) + 1, keyPath: \CachedState.b)
+        env.write(\CachedState.a, value: env.read(\CachedState.a) + 1)
+        env.write(\CachedState.b, value: env.read(\CachedState.b) + 1)
     }
 }
 
 struct RemoveKey: SyncOperation {
     let key: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.remove(keyPath: \CachedState.byKey, key: key)
+        env.remove(\CachedState.byKey, key: key)
     }
 }
 

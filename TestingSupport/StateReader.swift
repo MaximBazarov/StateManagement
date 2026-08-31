@@ -15,29 +15,13 @@
 import Foundation
 import StateManagement
 
-/// A public, read-only synchronous environment service interface designed specifically for unit testing.
+/// The sanctioned read for a test or a preview: a concrete ``EnvironmentService``, and therefore a
+/// Restricted Environment, so its reads carry a known reader.
 ///
-/// It allows tests to perform synchronous state reads (including atomic, keyed, and computed values)
-/// in a single line, without manually setting up reactive bookkeeping or custom mocks.
-@MainActor public final class StateReader: EnvironmentService {
-    
-    /// Reads an atomic state property from the environment.
-    public func read<S: StateContainer, V>(_ kp: KeyPath<S, V>) -> V {
-        getValue(kp)
-    }
-    
-    /// Reads a specific dictionary entry by key from the environment.
-    public func read<S: StateContainer, K: Hashable, V>(_ kp: KeyPath<S, [K: V]>, key: K) -> V? {
-        getValue(keyPath: kp, key: key)
-    }
-    
-    /// Reads a computed property from the environment.
-    public func read<S: StateContainer, V>(computed kp: KeyPath<S, Computed<NoKey, V>>) -> V {
-        getValue(kp)
-    }
-
-    /// Reads a keyed computed property by key from the environment.
-    public func read<S: StateContainer, K: Hashable, V>(computed kp: KeyPath<S, Computed<K, V>>, key: K) -> V {
-        getValue(kp, key: key)
-    }
-}
+/// It adds nothing. `read` for atomic, keyed, and computed Values is inherited, which is the point:
+/// out-of-package callers get the reads without the core exposing an identity-free one and without
+/// a Satellite reaching for `@testable` (ADR 0023).
+///
+/// Its reads subscribe, like any Service. Overriding ``serve()`` is not required; a reader that
+/// never reacts simply leaves the subscription unused.
+@MainActor public final class StateReader: EnvironmentService {}

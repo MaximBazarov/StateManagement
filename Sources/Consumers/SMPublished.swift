@@ -126,8 +126,8 @@ private struct SMPublishedWrite<Storage: StateContainer, Value>: SyncOperation {
     let value: Value
 
     func perform(in env: SyncOperationEnvironment) {
-        let old = env.read(keyPath: keyPath)
-        env.write(value, keyPath: keyPath)
+        let old = env.read(keyPath)
+        env.write(keyPath, value: value)
         invalidateChangedDictionaryKeys(old: old, new: value, keyPath: keyPath, env: env)
     }
 }

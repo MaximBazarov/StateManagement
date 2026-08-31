@@ -14,7 +14,7 @@
 
 import Foundation
 import Testing
-import StateManagement
+@testable import StateManagement
 
 final class ReadTestState: StateContainer {
     var label: String = ""
@@ -24,7 +24,7 @@ final class ReadTestState: StateContainer {
 struct SetReadLabel: SyncOperation {
     let value: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \ReadTestState.label)
+        env.write(\ReadTestState.label, value: value)
     }
 }
 
@@ -32,7 +32,7 @@ struct SetReadItem: SyncOperation {
     let key: String
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \ReadTestState.items, key: key)
+        env.write(\ReadTestState.items, key: key, value: value)
     }
 }
 

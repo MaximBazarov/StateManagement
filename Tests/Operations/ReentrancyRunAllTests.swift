@@ -14,7 +14,7 @@
 
 import Foundation
 import Testing
-import StateManagement
+@testable import StateManagement
 
 final class RunAllState: StateContainer {
     var total: Int = 0
@@ -23,8 +23,8 @@ final class RunAllState: StateContainer {
 struct AddToTotal: SyncOperation {
     let amount: Int
     func perform(in env: SyncOperationEnvironment) {
-        let current = env.read(keyPath: \RunAllState.total)
-        env.write(current + amount, keyPath: \RunAllState.total)
+        let current = env.read(\RunAllState.total)
+        env.write(\RunAllState.total, value: current + amount)
     }
 }
 

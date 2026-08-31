@@ -1,5 +1,5 @@
 import Foundation
-import StateManagement
+@testable import StateManagement
 import Testing
 
 
@@ -24,17 +24,17 @@ final class ComputedState: StateContainer {
     var d: Int = 0
 
     @Computed var computed_A_B_C0 = { env in
-        let a = env.getValue(\ComputedState.a)
-        let b = env.getValue(\ComputedState.b)
-        let key = env.getValue(\OtherComputedState.testKey)
-        let e0 = env.getValue(\ComputedState.e, key: key) ?? ""
+        let a = env.read(\ComputedState.a)
+        let b = env.read(\ComputedState.b)
+        let key = env.read(\OtherComputedState.testKey)
+        let e0 = env.read(\ComputedState.e, key: key) ?? ""
         return "\(a)-\(b)-\(e0)"
     }
 
     @Computed<String, String> var keyedComputed = { env, key in
-        let a = env.getValue(\ComputedState.a)
-        let b = env.getValue(\ComputedState.b)
-        let e0 = env.getValue(\ComputedState.e, key: "0") ?? ""
+        let a = env.read(\ComputedState.a)
+        let b = env.read(\ComputedState.b)
+        let e0 = env.read(\ComputedState.e, key: "0") ?? ""
         return "\(a)-\(b)-\(e0)"
     }
 }
@@ -51,7 +51,7 @@ final class TracingService: EnvironmentService {
         if isSetup {
 
         }
-        lastComputationValue = self.getValue(\ComputedState.$computed_A_B_C0)
+        lastComputationValue = self.read(\ComputedState.$computed_A_B_C0)
         confirmation?.confirm()
         await waiter?.resume()
     }
@@ -68,7 +68,7 @@ final class SecondTracingService: EnvironmentService {
     var lastComputationValue: String = ""
 
     override func serve() async {
-        lastComputationValue = self.getValue(\ComputedState.$computed_A_B_C0)
+        lastComputationValue = self.read(\ComputedState.$computed_A_B_C0)
         confirmation?.confirm()
         await waiter?.resume()
     }
@@ -86,7 +86,7 @@ final class KeyedTracingService: EnvironmentService {
     var lastComputationValue: String = ""
 
     override func serve() async {
-        lastComputationValue = self.getValue(\ComputedState.$keyedComputed, key: "myKey")
+        lastComputationValue = self.read(\ComputedState.$keyedComputed, key: "myKey")
         confirmation?.confirm()
         await waiter?.resume()
     }
@@ -103,7 +103,7 @@ final class SecondKeyedTracingService: EnvironmentService {
     var lastComputationValue: String = ""
 
     override func serve() async {
-        lastComputationValue = self.getValue(\ComputedState.$keyedComputed, key: "myKey")
+        lastComputationValue = self.read(\ComputedState.$keyedComputed, key: "myKey")
         confirmation?.confirm()
         await waiter?.resume()
     }
@@ -121,9 +121,9 @@ struct MutateValues: SyncOperation {
     let e0: String
 
     func perform(in env: SyncOperationEnvironment) {
-        env.write(a, keyPath: \ComputedState.a)
-        env.write(b, keyPath: \ComputedState.b)
-        env.write(e0, keyPath: \ComputedState.e, key: "0")
+        env.write(\ComputedState.a, value: a)
+        env.write(\ComputedState.b, value: b)
+        env.write(\ComputedState.e, key: "0", value: e0)
     }
 }
 
@@ -131,11 +131,11 @@ struct MutateValues: SyncOperation {
 /// Mutates values that are not used in computations.
 struct MutateUnrelated: SyncOperation {
     func perform(in env: StateManagement.SyncOperationEnvironment) {
-        env.write("AAA", keyPath: \ComputedState.c, key: 0)
+        env.write(\ComputedState.c, key: 0, value: "AAA")
         /// Even tho E is read but the key that it reads is 0 not 1.
         /// So it should not trigger an update.
-        env.write("AAA", keyPath: \ComputedState.e, key: "1")
-        env.write(11, keyPath: \ComputedState.d)
+        env.write(\ComputedState.e, key: "1", value: "AAA")
+        env.write(\ComputedState.d, value: 11)
     }
 }
 

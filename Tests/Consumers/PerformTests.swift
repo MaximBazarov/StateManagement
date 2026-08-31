@@ -30,15 +30,15 @@ final class PerformState: StateContainer {
 /// Synchronous mutation: reads the current count and writes it back incremented.
 struct IncrementCount: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let current = env.read(keyPath: \PerformState.count)
-        env.write(current + 1, keyPath: \PerformState.count)
+        let current = env.read(\PerformState.count)
+        env.write(\PerformState.count, value: current + 1)
     }
 }
 
 /// Sync child used by the async operation to land its effect.
 struct MarkLoaded: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(true, keyPath: \PerformState.loaded)
+        env.write(\PerformState.loaded, value: true)
     }
 }
 

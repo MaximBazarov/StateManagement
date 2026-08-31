@@ -29,7 +29,7 @@ final class DirectCycleState: StateContainer {
 
     init() {
         _loop = Computed(wrappedValue: { (env: ComputationEnvironment) -> Int in
-            env.getValue(\DirectCycleState.$loop)
+            env.read(\DirectCycleState.$loop)
         })
     }
 }
@@ -41,10 +41,10 @@ final class TransitiveCycleState: StateContainer {
 
     init() {
         _alpha = Computed(wrappedValue: { (env: ComputationEnvironment) -> Int in
-            env.getValue(\TransitiveCycleState.$beta)
+            env.read(\TransitiveCycleState.$beta)
         })
         _beta = Computed(wrappedValue: { (env: ComputationEnvironment) -> Int in
-            env.getValue(\TransitiveCycleState.$alpha)
+            env.read(\TransitiveCycleState.$alpha)
         })
     }
 }
@@ -59,9 +59,9 @@ final class PerKeyCycleState: StateContainer {
 
     init() {
         _chain = Computed(wrappedValue: { (env: ComputationEnvironment, key: Int) -> Int in
-            let nxt = env.getValue(\PerKeyCycleState.next, key: key) ?? 0
+            let nxt = env.read(\PerKeyCycleState.next, key: key) ?? 0
             if nxt == 0 { return 0 }
-            return env.getValue(\PerKeyCycleState.$chain, key: nxt) + 1
+            return env.read(\PerKeyCycleState.$chain, key: nxt) + 1
         })
     }
 }

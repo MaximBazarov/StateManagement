@@ -87,8 +87,12 @@ import Foundation
 
     // MARK: - I/O
 
+    // `Value` is unconstrained, so a `$` Address satisfies this overload with
+    // `Value == AsyncState<…>`. Disfavoured so `read(\C.$value)` reaches the awaitable read below
+    // instead of handing back the wrapper (ADR 0024).
+    @_disfavoredOverload
     public func read<Storage: StateContainer, Value>(
-        keyPath: KeyPath<Storage, Value>
+        _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         environment.getValue(keyPath: keyPath)
     }
@@ -129,7 +133,7 @@ import Foundation
 
     /// Returns a value in a dictionary stored at the given key path.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: KeyPath<Storage, [Key: Value]>,
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
         environment.getValue(keyPath: keyPath, key: key)

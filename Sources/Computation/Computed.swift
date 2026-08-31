@@ -54,6 +54,10 @@ A Computed is derived, not stored. Declare it with @Computed and reach it throug
 /// refuses one, and an instance held any other way — a local, or a stored property inside a
 /// Container — has no way to be evaluated.
 ///
+/// > Warning: A derivation that reads its own Address, directly or around a chain, traps
+/// (`fatalError`). The cycle cannot be broken at runtime because the read is what would supply the
+/// value it is waiting for.
+///
 /// In the following example `count` recomputes when `items` change; `isDone`
 /// recomputes when that id's `done` flag changes.
 /// ```swift
@@ -63,12 +67,12 @@ A Computed is derived, not stored. Declare it with @Computed and reach it throug
 ///
 ///     // Atomic computed: equal to the count of the items.
 ///     @Computed var count = { env in
-///         env.getValue(\ListContainer.items).count
+///         env.read(\ListContainer.items).count
 ///     }
 ///
 ///     // Keyed computed: derived per item id.
 ///     @Computed<UUID, Bool> var isDone = { env, id in
-///         env.getValue(\ListContainer.done, key: id) ?? false
+///         env.read(\ListContainer.done, key: id) ?? false
 ///     }
 /// }
 /// ```

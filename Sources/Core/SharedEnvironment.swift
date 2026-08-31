@@ -117,9 +117,9 @@ import Foundation
 
     /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address calls `onRead`.
     ///
-    /// > Warning: Not for a view. A body that calls `read` shows the value once and never updates
-    /// again. Use ``Watch``.
-    public func read<Storage: StateContainer, Value>(
+    /// Not public: a read is public only where the caller is known, and this one carries no reader
+    /// identity (ADR 0023). Out-of-package callers read through `StateReader`.
+    func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         getValue(keyPath: keyPath)
@@ -182,9 +182,8 @@ import Foundation
 
     /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address calls `onRead`.
     ///
-    /// > Warning: Not for a view. A body that calls `read` shows the value once and never updates
-    /// again. Use ``Watch``.
-    public func read<Storage: StateContainer, Key: Hashable, Value>(
+    /// Not public, for the same reason as the atomic ``read(_:)``.
+    func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {

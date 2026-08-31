@@ -52,7 +52,7 @@ import Foundation
     }
 
     /// Reads an **atomic state** value, then registers as a dependant and subscribes.
-    public func getValue<Storage: StateContainer, Value>(
+    public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         let targetValueID = ValueID(keyPath: keyPath)
@@ -63,7 +63,7 @@ import Foundation
     }
 
     /// Reads a **keyed state** value, then registers as a dependant and subscribes.
-    public func getValue<Storage: StateContainer, Key: Hashable, Value>(
+    public func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
@@ -75,7 +75,7 @@ import Foundation
     }
 
     /// Reads another ``Computed`` **atomic state** value, then registers as a dependant.
-    public func getValue<Storage: StateContainer, Output>(
+    public func read<Storage: StateContainer, Output>(
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         let innerID = ValueID(keyPath: keyPath)
@@ -92,7 +92,7 @@ import Foundation
     }
 
     /// Reads another ``Computed`` **keyed state** value, then registers as a dependant.
-    public func getValue<Storage: StateContainer, Key: Hashable, Output>(
+    public func read<Storage: StateContainer, Key: Hashable, Output>(
         _ keyPath: KeyPath<Storage, Computed<Key, Output>>,
         key: Key
     ) -> Output {

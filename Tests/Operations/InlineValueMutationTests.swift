@@ -28,8 +28,8 @@ final class IVMState: StateContainer {
 /// Writes `\IVMState.x` twice in one operation to prove notifications batch.
 struct DoubleWrite: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(1, keyPath: \IVMState.x)
-        env.write(2, keyPath: \IVMState.x)
+        env.write(\IVMState.x, value: 1)
+        env.write(\IVMState.x, value: 2)
     }
 }
 
@@ -44,8 +44,8 @@ struct InlineValueMutationTests {
         let env = SharedEnvironment()
 
         let op = InlineValueMutation(value: 42) { amount, env in
-            let current = env.read(keyPath: \IVMState.x)
-            env.write(current + amount, keyPath: \IVMState.x)
+            let current = env.read(\IVMState.x)
+            env.write(\IVMState.x, value: current + amount)
         }
         env.perform(op)
 
@@ -58,8 +58,8 @@ struct InlineValueMutationTests {
         env.perform(IsoInlineSeed(value: 10))
 
         let op = InlineValueMutation(value: 5) { amount, env in
-            let current = env.read(keyPath: \IVMState.x)
-            env.write(current + amount, keyPath: \IVMState.x)
+            let current = env.read(\IVMState.x)
+            env.write(\IVMState.x, value: current + amount)
         }
         env.perform(op)
 
@@ -87,6 +87,6 @@ struct InlineValueMutationTests {
 struct IsoInlineSeed: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \IVMState.x)
+        env.write(\IVMState.x, value: value)
     }
 }

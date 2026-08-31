@@ -124,7 +124,7 @@ final class NestedWriteBox: StateContainer {
 
 struct WriteNestedCount: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(99, keyPath: \NestedWriteBox.count)
+        env.write(\NestedWriteBox.count, value: 99)
     }
 }
 
@@ -158,7 +158,7 @@ final class ApplyingKeyedBox: StateContainer {
 final class ApplyingComputedBox: StateContainer {
     @AsyncState(ApplyingStrategy.self) var theme: String = "system"
     @Computed var labeled = { (env: ComputationEnvironment) -> String in
-        env.getValue(\ApplyingComputedBox.theme)
+        env.read(\ApplyingComputedBox.theme)
     }
 }
 
@@ -196,7 +196,7 @@ final class ApplyingThemeService: EnvironmentService {
 
     override func serve() async {
         serveCount += 1
-        seen.append(getValue(\ApplyingBox.theme))
+        seen.append(read(\ApplyingBox.theme))
     }
 }
 
@@ -207,7 +207,7 @@ final class ApplyingKeyedService: EnvironmentService {
 
     override func serve() async {
         serveCount += 1
-        seen.append(getValue(keyPath: \ApplyingKeyedBox.done, key: "a"))
+        seen.append(read(\ApplyingKeyedBox.done, key: "a"))
     }
 }
 
@@ -218,29 +218,29 @@ final class ApplyingComputedService: EnvironmentService {
 
     override func serve() async {
         serveCount += 1
-        seen.append(getValue(\ApplyingComputedBox.$labeled))
+        seen.append(read(\ApplyingComputedBox.$labeled))
     }
 }
 
 struct NestedWriteThenApplyThenWrite: SyncOperation {
     let strategyEnv: AsyncStrategyEnvironment
     func perform(in env: SyncOperationEnvironment) {
-        env.write(1, keyPath: \NestedWriteBox.count)
+        env.write(\NestedWriteBox.count, value: 1)
         strategyEnv.apply("dark", keyPath: \AsyncBox.$theme)
-        env.write(2, keyPath: \NestedWriteBox.count)
+        env.write(\NestedWriteBox.count, value: 2)
     }
 }
 
 struct SetAsyncTheme: SyncOperation {
     let value: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \AsyncBox.theme)
+        env.write(\AsyncBox.theme, value: value)
     }
 }
 
 struct SetAsyncFlag: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(true, keyPath: \AsyncBox.done, key: "a")
+        env.write(\AsyncBox.done, key: "a", value: true)
     }
 }
 
@@ -835,8 +835,8 @@ struct AsyncStateFirstReadTests {
         probe.expect(updates: 1)
     }
 
-    @Test("EnvironmentService getValue of apply-inside-onRead serves once with the applied Value")
-    func serviceGetValueOfApplyInsideOnReadServesOnce() async {
+    @Test("EnvironmentService read of apply-inside-onRead serves once with the applied Value")
+    func serviceReadOfApplyInsideOnReadServesOnce() async {
         let env = SharedEnvironment()
         env.install(ApplyingStrategy(env: env.strategyEnvironment()))
 
@@ -847,8 +847,8 @@ struct AsyncStateFirstReadTests {
         #expect(await waitUntil(timeout: .milliseconds(150)) { service.serveCount > 1 } == false)
     }
 
-    @Test("EnvironmentService getValue of a keyed apply-inside-onRead serves once with the applied Value")
-    func serviceKeyedGetValueOfApplyInsideOnReadServesOnce() async {
+    @Test("EnvironmentService read of a keyed apply-inside-onRead serves once with the applied Value")
+    func serviceKeyedReadOfApplyInsideOnReadServesOnce() async {
         let env = SharedEnvironment()
         env.install(ApplyingStrategy(env: env.strategyEnvironment()))
 
@@ -859,8 +859,8 @@ struct AsyncStateFirstReadTests {
         #expect(await waitUntil(timeout: .milliseconds(150)) { service.serveCount > 1 } == false)
     }
 
-    @Test("EnvironmentService getValue of a Computed that reads apply-inside-onRead serves once with the applied Value")
-    func serviceComputedGetValueOfApplyInsideOnReadServesOnce() async {
+    @Test("EnvironmentService read of a Computed that reads apply-inside-onRead serves once with the applied Value")
+    func serviceComputedReadOfApplyInsideOnReadServesOnce() async {
         let env = SharedEnvironment()
         env.install(ApplyingStrategy(env: env.strategyEnvironment()))
 

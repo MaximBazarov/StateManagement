@@ -26,7 +26,7 @@ leftover.$theme.sink { print($0) }      // follows Operations on .shared
 
 struct SetTheme: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write("light", keyPath: \SettingsController.theme)
+        env.write(\SettingsController.theme, value: "light")
     }
 }
 ```
@@ -35,7 +35,7 @@ struct SetTheme: SyncOperation {
 
 Tests that go through leftover Combine use `.shared` plus `reset()`. Tests that Watch or perform Operations use a fresh Environment.
 
-``SharedEnvironment/read(_:)`` still snapshots. It does not subscribe.
+A test that wants a snapshot rather than a subscription reads through `StateReader` in `StateManagementTestingSupport`.
 
 ## `$` and `objectWillChange`
 

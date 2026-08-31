@@ -34,12 +34,12 @@ final class OpReadState: StateContainer {
 
     @Computed var doubled = { (env: ComputationEnvironment) -> Int in
         OpReadProbe.atomic += 1
-        return env.getValue(\OpReadState.count) * 2
+        return env.read(\OpReadState.count) * 2
     }
 
     @Computed var fromKey = { (env: ComputationEnvironment, key: String) -> Int in
         OpReadProbe.keyed += 1
-        return (env.getValue(\OpReadState.byKey, key: key) ?? 0) + 1
+        return (env.read(\OpReadState.byKey, key: key) ?? 0) + 1
     }
 }
 
@@ -66,7 +66,7 @@ struct ReadKeyedComputed: SyncOperation {
 /// Writes an input, then reads the Computed that derives from it in the same Operation.
 struct BumpThenReadComputed: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(env.read(keyPath: \OpReadState.count) + 1, keyPath: \OpReadState.count)
+        env.write(\OpReadState.count, value: env.read(\OpReadState.count) + 1)
         OpReadSink.atomic = env.read(\OpReadState.$doubled)
     }
 }

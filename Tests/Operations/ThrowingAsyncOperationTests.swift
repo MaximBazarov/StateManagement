@@ -27,13 +27,13 @@ final class ThrowAsyncState: StateContainer {
 
 struct ThrowAsyncWrite: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(1, keyPath: \ThrowAsyncState.count)
+        env.write(\ThrowAsyncState.count, value: 1)
     }
 }
 
 struct ThrowAsyncWriteThenThrow: ThrowingSyncOperation {
     func perform(in env: SyncOperationEnvironment) throws(ThrowAsyncError) {
-        env.write(1, keyPath: \ThrowAsyncState.count)
+        env.write(\ThrowAsyncState.count, value: 1)
         throw .boom
     }
 }

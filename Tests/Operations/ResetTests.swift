@@ -27,14 +27,14 @@ final class ResetOtherBox: StateContainer {
 struct SetResetCounter: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \ResetBox.counter)
+        env.write(\ResetBox.counter, value: value)
     }
 }
 
 struct SetResetLabel: SyncOperation {
     let value: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \ResetOtherBox.label)
+        env.write(\ResetOtherBox.label, value: value)
     }
 }
 
@@ -104,7 +104,7 @@ struct ResetThenWriteCounter: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
         env.reset()
-        env.write(value, keyPath: \ResetBox.counter)
+        env.write(\ResetBox.counter, value: value)
     }
 }
 
@@ -114,7 +114,7 @@ final class ResetProbeService: EnvironmentService {
     var waiter = Waiter(expectedCount: 1)
 
     override func serve() async {
-        _ = getValue(\ResetBox.counter)
+        _ = read(\ResetBox.counter)
         serveCount += 1
         await waiter.resume()
     }
@@ -139,7 +139,6 @@ struct ResetServiceTests {
         env.perform(SetResetCounter(value: 9))
         env.perform(ResetAll())
 
-        service.setValue(99, keyPath: \ResetBox.counter)
         service.perform(SetResetCounter(value: 77))
 
         #expect(env.read(\ResetBox.counter) == 0)

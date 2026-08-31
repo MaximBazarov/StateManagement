@@ -33,13 +33,13 @@ final class TestWatchState: StateContainer {
     // dependency (`counter`), so some dependency changes leave the output unchanged.
     var counter: Int = 0
     @Computed var parity = { (env: ComputationEnvironment) -> String in
-        env.getValue(\TestWatchState.counter) % 2 == 0 ? "even" : "odd"
+        env.read(\TestWatchState.counter) % 2 == 0 ? "even" : "odd"
     }
 
     // Per-row selection fixture: a keyed computed over a single scalar selection.
     var selection: Int? = nil
     @Computed var isSelected = { (env: ComputationEnvironment, id: Int) -> Bool in
-        env.getValue(\TestWatchState.selection) == id
+        env.read(\TestWatchState.selection) == id
     }
 
     // Non-Equatable dict fixture
@@ -47,19 +47,19 @@ final class TestWatchState: StateContainer {
 
     // Non-Equatable computed fixture
     @Computed var boxComputed = { (env: ComputationEnvironment) -> Box in
-        Box(n: env.getValue(\TestWatchState.counter))
+        Box(n: env.read(\TestWatchState.counter))
     }
 
     // Non-Equatable keyed computed fixture
     @Computed var boxKeyedComputed = { (env: ComputationEnvironment, key: String) -> Box in
-        Box(n: env.getValue(\TestWatchState.counter) + key.count)
+        Box(n: env.read(\TestWatchState.counter) + key.count)
     }
 }
 
 struct UpdateValue: SyncOperation {
     let newValue: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(newValue, keyPath: \TestWatchState.value)
+        env.write(\TestWatchState.value, value: newValue)
     }
 }
 
@@ -67,35 +67,35 @@ struct UpdateDictValue: SyncOperation {
     let key: String
     let newValue: String
     func perform(in env: SyncOperationEnvironment) {
-        env.write(newValue, keyPath: \TestWatchState.dict, key: key)
+        env.write(\TestWatchState.dict, key: key, value: newValue)
     }
 }
 
 struct SetCounter: SyncOperation {
     let value: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: \TestWatchState.counter)
+        env.write(\TestWatchState.counter, value: value)
     }
 }
 
 struct SetSelection: SyncOperation {
     let id: Int?
     func perform(in env: SyncOperationEnvironment) {
-        env.write(id, keyPath: \TestWatchState.selection)
+        env.write(\TestWatchState.selection, value: id)
     }
 }
 
 struct SetBox: SyncOperation {
     let n: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(Box(n: n), keyPath: \TestWatchState.box)
+        env.write(\TestWatchState.box, value: Box(n: n))
     }
 }
 
 struct SetBoxDict: SyncOperation {
     let key: String; let n: Int
     func perform(in env: SyncOperationEnvironment) {
-        env.write(Box(n: n), keyPath: \TestWatchState.boxDict, key: key)
+        env.write(\TestWatchState.boxDict, key: key, value: Box(n: n))
     }
 }
 
@@ -136,7 +136,7 @@ struct BindingWriteView: View {
     var body: some View {
         let _ = counter.count += 1
         let _ = holder.binding = $value.binding { newValue, env in
-            env.write(newValue, keyPath: \TestWatchState.value)
+            env.write(\TestWatchState.value, value: newValue)
         }
         Text(value)
     }

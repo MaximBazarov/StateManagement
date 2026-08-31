@@ -72,14 +72,14 @@ private let syncOperationLogger = Logger(
     // MARK: - I/O
 
     public func read<Storage: StateContainer, Value>(
-        keyPath: KeyPath<Storage, Value>
+        _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         environment.getValue(keyPath: keyPath)
     }
 
     public func write<Storage: StateContainer, Value>(
-        _ newValue: Value,
-        keyPath: WritableKeyPath<Storage, Value>
+        _ keyPath: WritableKeyPath<Storage, Value>,
+        value newValue: Value
     ) {
         precondition(!(newValue is ComputedRefusesStorage), computedIsNotStorable)
         guard allowsWrite else {
@@ -125,7 +125,7 @@ private let syncOperationLogger = Logger(
 
     /// Returns a value in a dictionary stored at the given key path.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: KeyPath<Storage, [Key: Value]>,
+        _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
         environment.getValue(keyPath: keyPath, key: key)
@@ -133,9 +133,9 @@ private let syncOperationLogger = Logger(
 
     /// Sets a dictionary value for the given key and reports a change for observation.
     public func write<Storage: StateContainer, Key: Hashable, Value>(
-        _ newValue: Value,
-        keyPath: WritableKeyPath<Storage, [Key: Value]>,
-        key: Key
+        _ keyPath: WritableKeyPath<Storage, [Key: Value]>,
+        key: Key,
+        value newValue: Value
     ) {
         precondition(!(newValue is ComputedRefusesStorage), computedIsNotStorable)
         guard allowsWrite else {
@@ -150,7 +150,7 @@ private let syncOperationLogger = Logger(
     /// Prefer this over rewriting the whole dictionary when deleting an entry: it invalidates the
     /// keyed value so per-key watchers are notified (and their subscriptions flushed).
     public func remove<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: WritableKeyPath<Storage, [Key: Value]>,
+        _ keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
         guard allowsWrite else {
@@ -173,8 +173,8 @@ private let syncOperationLogger = Logger(
     (\\Container.$name).
     """)
     public func write<Storage: StateContainer, Key: Hashable, Output>(
-        _ newValue: Computed<Key, Output>,
-        keyPath: WritableKeyPath<Storage, Computed<Key, Output>>
+        _ keyPath: WritableKeyPath<Storage, Computed<Key, Output>>,
+        value newValue: Computed<Key, Output>
     ) {
         preconditionFailure(computedIsNotStorable)
     }
@@ -184,9 +184,9 @@ private let syncOperationLogger = Logger(
     (\\Container.$name).
     """)
     public func write<Storage: StateContainer, DictKey: Hashable, Key: Hashable, Output>(
-        _ newValue: Computed<Key, Output>,
-        keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>,
-        key: DictKey
+        _ keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>,
+        key: DictKey,
+        value newValue: Computed<Key, Output>
     ) {
         preconditionFailure(computedIsNotStorable)
     }
@@ -196,8 +196,8 @@ private let syncOperationLogger = Logger(
     (\\Container.$name).
     """)
     public func write<Storage: StateContainer, DictKey: Hashable, Key: Hashable, Output>(
-        _ newValue: [DictKey: Computed<Key, Output>],
-        keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>
+        _ keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>,
+        value newValue: [DictKey: Computed<Key, Output>]
     ) {
         preconditionFailure(computedIsNotStorable)
     }

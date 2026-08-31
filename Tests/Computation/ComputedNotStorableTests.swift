@@ -29,7 +29,7 @@ struct WriteThroughGeneric<Value>: SyncOperation {
     let address: WritableKeyPath<NotStorableState, Value>
 
     func perform(in env: SyncOperationEnvironment) {
-        env.write(value, keyPath: address)
+        env.write(address, value: value)
     }
 }
 

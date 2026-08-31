@@ -27,8 +27,8 @@ final class SeedTestState: StateContainer {
 struct SeedBumpCounter: SyncOperation {
     let by: Int
     func perform(in env: SyncOperationEnvironment) {
-        let current = env.read(keyPath: \SeedTestState.counter)
-        env.write(current + by, keyPath: \SeedTestState.counter)
+        let current = env.read(\SeedTestState.counter)
+        env.write(\SeedTestState.counter, value: current + by)
     }
 }
 

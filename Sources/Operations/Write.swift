@@ -15,8 +15,8 @@
 #if DEBUG
 import Foundation
 
-/// DEBUG helper that writes one value through ``SyncOperationEnvironment/write(_:keyPath:)``
-/// or one dictionary entry through ``SyncOperationEnvironment/write(_:keyPath:key:)``.
+/// DEBUG helper that writes one value through ``SyncOperationEnvironment/write(_:value:)``
+/// or one dictionary entry through ``SyncOperationEnvironment/write(_:key:value:)``.
 ///
 /// Prefer named operations in production code. Use ``Write`` in previews and tests with
 /// ``SharedEnvironment/seeded(_:)``, ``SharedEnvironment/seed(_:)``, or
@@ -27,7 +27,7 @@ import Foundation
     /// Writes a whole value at `keyPath`.
     public init(_ keyPath: WritableKeyPath<Storage, Value>, _ value: Value) {
         apply = { env in
-            env.write(value, keyPath: keyPath)
+            env.write(keyPath, value: value)
         }
     }
 
@@ -38,7 +38,7 @@ import Foundation
         _ value: Value
     ) {
         apply = { env in
-            env.write(value, keyPath: keyPath, key: key)
+            env.write(keyPath, key: key, value: value)
         }
     }
 

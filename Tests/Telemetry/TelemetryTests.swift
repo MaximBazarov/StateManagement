@@ -516,7 +516,7 @@ struct TestAsyncOperation: AsyncOperation {
 
 struct TestStateMutationOperation: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        env.write(42, keyPath: \MockStorage.count)
+        env.write(\MockStorage.count, value: 42)
     }
 }
 

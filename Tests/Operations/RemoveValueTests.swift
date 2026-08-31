@@ -24,8 +24,8 @@ final class RemoveTestState: StateContainer {
     /// Reads only keys "A" and "B" — so it must recompute when either is removed,
     /// and must NOT recompute when an unread key (e.g. "C") is removed.
     @Computed var sumOfAB = { (env: ComputationEnvironment) -> Int in
-        let a = env.getValue(\RemoveTestState.items, key: "A") ?? 0
-        let b = env.getValue(\RemoveTestState.items, key: "B") ?? 0
+        let a = env.read(\RemoveTestState.items, key: "A") ?? 0
+        let b = env.read(\RemoveTestState.items, key: "B") ?? 0
         return a + b
     }
 }
@@ -33,7 +33,7 @@ final class RemoveTestState: StateContainer {
 struct RemoveItem: SyncOperation {
     let key: String
     func perform(in env: SyncOperationEnvironment) {
-        env.remove(keyPath: \RemoveTestState.items, key: key)
+        env.remove(\RemoveTestState.items, key: key)
     }
 }
 
@@ -45,7 +45,7 @@ final class SumTracingService: EnvironmentService {
     var lastValue: Int = -1
 
     override func serve() async {
-        lastValue = self.getValue(\RemoveTestState.$sumOfAB)
+        lastValue = self.read(\RemoveTestState.$sumOfAB)
         confirmation?.confirm()
         await waiter?.resume()
     }

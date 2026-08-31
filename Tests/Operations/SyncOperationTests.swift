@@ -31,15 +31,15 @@ final class MyState: StateContainer {
 
 struct IncrementMyStateX: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let x = env.read(keyPath: \MyState.myInt)
-        env.write(x + 1, keyPath: \MyState.myInt)
+        let x = env.read(\MyState.myInt)
+        env.write(\MyState.myInt, value: x + 1)
     }
 }
 
 struct IncrementMyStateY: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let old = env.read(keyPath: \MyState.myValue.y)
-        env.write(old + 1, keyPath: \MyState.myValue.y)
+        let old = env.read(\MyState.myValue.y)
+        env.write(\MyState.myValue.y, value: old + 1)
     }
 }
 
