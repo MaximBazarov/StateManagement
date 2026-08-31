@@ -18,6 +18,10 @@ _Avoid_: abbreviating the name, using the name for this package alone, and struc
 One isolated owner of all state. Production, a preview, and a test each have their own.
 _Avoid_: store, warehouse, DI container, shared environment (as a second concept)
 
+**Restricted Environment**:
+The narrowed surface onto the Environment that non-view code holds: one each for a Sync operation, an Async operation, a Computed, and an AsyncStrategy, plus the base a Service inherits. It carries the identity of the caller, so a read through it is a declared dependency.
+_Avoid_: proxy environment, child environment, sub-environment, and using this for Watch
+
 **Container**:
 A named slice of application state. An Environment owns exactly one instance of each type. Containers do not nest. Types may nest inside a Value.
 _Avoid_: storage, warehouse, module, store, nested store, sub-container, child environment

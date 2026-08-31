@@ -93,6 +93,38 @@ import Foundation
         environment.getValue(keyPath: keyPath)
     }
 
+    // MARK: - Computed
+
+    /// Reads an atomic ``Computed``. The Operation does not subscribe: it reads and lets go.
+    /// The cache and the dependency edges behave as for any other reader (ADR 0023).
+    public func read<Storage: StateContainer, Output>(
+        _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
+    ) -> Output {
+        environment
+            .getValue(keyPath: keyPath)
+            .read(
+                env: environment,
+                valueID: ValueID(keyPath: keyPath),
+                receiver: nil,
+                key: .noKey
+            )
+    }
+
+    /// Reads a keyed ``Computed`` for `key`, without subscribing.
+    public func read<Storage: StateContainer, Key: Hashable, Output>(
+        _ keyPath: KeyPath<Storage, Computed<Key, Output>>,
+        key: Key
+    ) -> Output {
+        environment
+            .getValue(keyPath: keyPath)
+            .read(
+                env: environment,
+                valueID: ValueID(keyPath: keyPath, key: key),
+                receiver: nil,
+                key: key
+            )
+    }
+
     // MARK: - Dictionary
 
     /// Returns a value in a dictionary stored at the given key path.

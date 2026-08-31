@@ -23,15 +23,13 @@ final class SvcTestState: StateContainer {
     var count: Int = 0
     var dict: [String: String] = [:]
 
-    var replaceable = Computed<NoKey, Int> { env in
+    @Computed var scaled = { (env: ComputationEnvironment) -> Int in
         env.getValue(\SvcTestState.count) * 10
     }
 
     @Computed var keyed = { (env: ComputationEnvironment, key: String) -> Int in
         env.getValue(\SvcTestState.count) + key.count
     }
-
-    var computedDict: [String: Computed<NoKey, Int>] = [:]
 }
 
 // MARK: - Operations
@@ -76,14 +74,14 @@ final class TrackingService: EnvironmentService {
         // Read values (subscribes the service to changes)
         lastCount = getValue(\SvcTestState.count)
         lastDictValue = getValue(keyPath: \SvcTestState.dict, key: "a")
-        lastComputed = getValue(\SvcTestState.replaceable)
+        lastComputed = getValue(\SvcTestState.$scaled)
         lastKeyedComputed = getValue(\SvcTestState.$keyed, key: "myKey")
 
         // Capture wasUpdated results before they are cleared
         countUpdated = wasUpdated(\SvcTestState.count)
         countArrayUpdated = wasUpdated([\SvcTestState.count])
-        computedUpdated = wasUpdated(\SvcTestState.replaceable)
-        computedArrayUpdated = wasUpdated([\SvcTestState.replaceable])
+        computedUpdated = wasUpdated(\SvcTestState.$scaled)
+        computedArrayUpdated = wasUpdated([\SvcTestState.$scaled])
         keyedComputedUpdated = wasUpdated(\SvcTestState.$keyed, key: "myKey")
 
         serveCount += 1
@@ -170,7 +168,7 @@ struct ServiceAutoSubscribeTests {
         let env = SharedEnvironment()
         let service = await env.spawnService(TrackingService.self)
 
-        // Initial: count=0, replaceable = 0*10 = 0, keyed("myKey") = 0 + 5 = 5
+        // Initial: count=0, scaled = 0*10 = 0, keyed("myKey") = 0 + 5 = 5
         #expect(service.lastComputed == 0)
         #expect(service.lastKeyedComputed == 5)
 
@@ -186,56 +184,12 @@ struct ServiceAutoSubscribeTests {
         #expect(service.countUpdated == true)
     }
 
-    /// Same inputs, different output after the swap. That is the proof the
-    /// closure itself was replaced, not just its cached value.
-    @Test("Replacing a computed swaps its derivation closure")
-    func serviceReplacesComputedValue() async throws {
-        let env = SharedEnvironment()
-        let service = await env.spawnService(TrackingService.self)
-
-        // Seed count so the difference is visible
-        service.waiter = Waiter(expectedCount: 1)
-        env.perform(SetCount(value: 2))
-        try await service.waiter.wait()
-        #expect(service.lastComputed == 20) // 2 * 10
-
-        // Replace the computed derivation: multiply by 100 instead of 10
-        let replacement = Computed<NoKey, Int> { env in
-            env.getValue(\SvcTestState.count) * 100
-        }
-        service.setValue(replacement, keyPath: \SvcTestState.replaceable)
-
-        // The service ignores its own write, so drive a re-serve with an external
-        // change that keeps count at 2. Same input, new output proves the swap.
-        service.waiter = Waiter(expectedCount: 1)
-        env.perform(SetCount(value: 2))
-        try await service.waiter.wait()
-
-        #expect(service.lastComputed == 200) // 2 * 100
-        #expect(service.computedUpdated == true)
-        #expect(service.computedArrayUpdated == true)
-    }
-
     @Test("getService returns the cached instance, not a new one")
     func getServiceReturnsSameInstance() async throws {
         let env = SharedEnvironment()
         let a = await env.spawnService(TrackingService.self)
         let b = await env.getService(TrackingService.self)
         #expect(a === b)
-    }
-
-    @Test("setValue writes into a keyed computed dictionary slot")
-    func serviceSetValueKeyedComputedDict() async throws {
-        let env = SharedEnvironment()
-        let service = await env.spawnService(TrackingService.self)
-
-        let comp = Computed<NoKey, Int> { env in 999 }
-        service.setValue(comp, keyPath: \SvcTestState.computedDict, key: "slot")
-
-        // Verify the value was stored by reading through the environment
-        let reader = await env.spawnService(StateReader.self)
-        let stored: Computed<NoKey, Int>? = reader.read(\SvcTestState.computedDict, key: "slot")
-        #expect(stored != nil)
     }
 
     @Test("StateReader reads atomic and keyed computed values")
@@ -247,7 +201,7 @@ struct ServiceAutoSubscribeTests {
 
         let reader = await env.spawnService(StateReader.self)
 
-        let atomicComputed: Int = reader.read(computed: \SvcTestState.replaceable)
+        let atomicComputed: Int = reader.read(computed: \SvcTestState.$scaled)
         #expect(atomicComputed == 50) // 5 * 10
 
         let keyedComputed: Int = reader.read(computed: \SvcTestState.$keyed, key: "hi")

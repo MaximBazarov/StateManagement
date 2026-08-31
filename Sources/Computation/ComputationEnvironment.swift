@@ -23,7 +23,8 @@ import Foundation
 
     /// Reference to the actual ``NotificationReceiver`` of the consumer created for the ``Computed``,
     /// E.g (``Watch``) or ``EnvironmentService`` that should receive the notification when the value changes.
-    private var notificationReceiver: NotificationReceiver
+    /// `nil` when the reader does not subscribe, which is how an Operation reads (ADR 0023).
+    private var notificationReceiver: NotificationReceiver?
 
     /// When ``Computed`` reads other values it registers itself as a ``Dependent``.
     /// When those values change, dependent `invalidate` is called before the notifications of ``NotificationReceiver``
@@ -40,7 +41,7 @@ import Foundation
 
     init(
         env: SharedEnvironment,
-        notificationReceiver: NotificationReceiver,
+        notificationReceiver: NotificationReceiver?,
         dependent: Dependent,
         evaluating: [ValueID] = []
     ) {
@@ -57,10 +58,7 @@ import Foundation
         let targetValueID = ValueID(keyPath: keyPath)
         let value = env.getValue(keyPath: keyPath)
         env.observation.register(dependent: dependent, on: targetValueID)
-        env.observation.subscribe(
-            receiver: notificationReceiver,
-            valueID: targetValueID
-        )
+        subscribe(to: targetValueID)
         return value
     }
 
@@ -72,10 +70,7 @@ import Foundation
         let targetValueID = ValueID(keyPath: keyPath, key: key)
         let value = env.getValue(keyPath: keyPath, key: key)
         env.observation.register(dependent: dependent, on: targetValueID)
-        env.observation.subscribe(
-            receiver: notificationReceiver,
-            valueID: targetValueID
-        )
+        subscribe(to: targetValueID)
         return value
     }
 
@@ -112,5 +107,10 @@ import Foundation
         )
         env.observation.register(dependent: dependent, on: innerID)
         return value
+    }
+
+    private func subscribe(to valueID: ValueID) {
+        guard let notificationReceiver else { return }
+        env.observation.subscribe(receiver: notificationReceiver, valueID: valueID)
     }
 }

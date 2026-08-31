@@ -10,7 +10,13 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ### Added
 
+- `SyncOperationEnvironment` and `AsyncOperationEnvironment` read a `Computed`, atomic and keyed, by Address. An Operation does not subscribe; cache, dependency edges, and the cycle guard behave as for any other reader.
 - `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.
+
+### Removed
+
+- `EnvironmentService.setValue` for a `Computed`, both the atomic and the keyed-dictionary overload. A derivation is not swappable at runtime; declare it with `@Computed` and let an Operation write the Values it reads. 0.9.x break, no shim.
+- A `Computed` cannot be written at all. Every write route refuses one, including a dictionary or array of them, so a Container can no longer hold a `Computed` no reader could evaluate.
 
 ### Fixed
 

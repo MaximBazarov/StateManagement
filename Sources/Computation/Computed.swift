@@ -22,6 +22,24 @@ public enum NoKey: Hashable {
     case noKey
 }
 
+/// Spots a ``Computed`` behind a generic `Value`, so a write route can refuse one it could not
+/// reject at compile time. See ADR 0023.
+///
+/// The conditional conformances carry the mark through a container, so a dictionary or array of
+/// Computeds is refused as readily as a bare one.
+protocol ComputedRefusesStorage {}
+
+extension Dictionary: ComputedRefusesStorage where Value: ComputedRefusesStorage {}
+extension Array: ComputedRefusesStorage where Element: ComputedRefusesStorage {}
+extension Optional: ComputedRefusesStorage where Wrapped: ComputedRefusesStorage {}
+
+/// The refusal every write route reports. The `@available` twins repeat these words as a literal,
+/// because an attribute message cannot reference a constant.
+let computedIsNotStorable = """
+A Computed is derived, not stored. Declare it with @Computed and reach it through its Address \
+(\\Container.$name).
+"""
+
 /// A value derived from other values, that is kept up to date automatically.
 /// The function that derives the new value is provided with the ``ComputationEnvironment`` instance and whenever reads
 /// other values registers as a `dependant` of them.
@@ -31,6 +49,10 @@ public enum NoKey: Hashable {
 ///
 /// > Note The result is cached. The closure runs on the first read, then the value is reused until invalidated.
 /// Reading the same computed from many places in one update costs one computation.
+///
+/// > Important: A Computed is evaluable only through its Address, `\Container.$name`. A write route
+/// refuses one, and an instance held any other way — a local, or a stored property inside a
+/// Container — has no way to be evaluated.
 ///
 /// In the following example `count` recomputes when `items` change; `isDone`
 /// recomputes when that id's `done` flag changes.
@@ -90,6 +112,10 @@ public enum NoKey: Hashable {
     /// entry when an input changes, so a later cache hit is safe — it only happens while those
     /// edges still hold.
     ///
+    /// A `nil` `receiver` reads without subscribing. An Operation reads that way: it is a
+    /// first-class reader, so the cache and the dependency edges behave exactly as for any other
+    /// consumer, and only the subscription is withheld (ADR 0023).
+    ///
     /// `evaluating` is the history of computeds currently mid-read, threaded down the recursion
     /// (top-level callers rely on the default). If this `valueID` is already in that history, the
     /// closure is about to read itself — a dependency cycle: the chain is reported through telemetry
@@ -100,12 +126,12 @@ public enum NoKey: Hashable {
     func read(
         env: SharedEnvironment,
         valueID: ValueID,
-        receiver: NotificationReceiver,
+        receiver: NotificationReceiver?,
         key: Key,
         evaluating: [ValueID] = []
     ) -> Output {
         if let cached = cache[key] {
-            env.observation.subscribe(receiver: receiver, valueID: valueID)
+            subscribe(receiver, to: valueID, in: env)
             return cached
         }
 
@@ -129,7 +155,18 @@ public enum NoKey: Hashable {
         )
         let value = wrappedValue(compEnv, key)
         cache[key] = value
-        env.observation.subscribe(receiver: receiver, valueID: valueID)
+        subscribe(receiver, to: valueID, in: env)
         return value
     }
+
+    private func subscribe(
+        _ receiver: NotificationReceiver?,
+        to valueID: ValueID,
+        in env: SharedEnvironment
+    ) {
+        guard let receiver else { return }
+        env.observation.subscribe(receiver: receiver, valueID: valueID)
+    }
 }
+
+extension Computed: ComputedRefusesStorage {}

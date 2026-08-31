@@ -81,11 +81,44 @@ private let syncOperationLogger = Logger(
         _ newValue: Value,
         keyPath: WritableKeyPath<Storage, Value>
     ) {
+        precondition(!(newValue is ComputedRefusesStorage), computedIsNotStorable)
         guard allowsWrite else {
             syncOperationLogger.debug("Nested strategy perform has no write")
             return
         }
         environment.setValue(newValue, keyPath: keyPath)
+    }
+
+    // MARK: - Computed
+
+    /// Reads an atomic ``Computed``. The Operation does not subscribe: it reads and lets go.
+    /// The cache and the dependency edges behave as for any other reader (ADR 0023).
+    public func read<Storage: StateContainer, Output>(
+        _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
+    ) -> Output {
+        environment
+            .getValue(keyPath: keyPath)
+            .read(
+                env: environment,
+                valueID: ValueID(keyPath: keyPath),
+                receiver: nil,
+                key: .noKey
+            )
+    }
+
+    /// Reads a keyed ``Computed`` for `key`, without subscribing.
+    public func read<Storage: StateContainer, Key: Hashable, Output>(
+        _ keyPath: KeyPath<Storage, Computed<Key, Output>>,
+        key: Key
+    ) -> Output {
+        environment
+            .getValue(keyPath: keyPath)
+            .read(
+                env: environment,
+                valueID: ValueID(keyPath: keyPath, key: key),
+                receiver: nil,
+                key: key
+            )
     }
 
     // MARK: - Dictionary
@@ -104,6 +137,7 @@ private let syncOperationLogger = Logger(
         keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
+        precondition(!(newValue is ComputedRefusesStorage), computedIsNotStorable)
         guard allowsWrite else {
             syncOperationLogger.debug("Nested strategy perform has no write")
             return
@@ -124,6 +158,48 @@ private let syncOperationLogger = Logger(
             return
         }
         environment.removeValue(keyPath: keyPath, key: key)
+    }
+
+    // MARK: - A Computed is not storable
+
+    // Deprecated rather than unavailable: Swift skips an unavailable overload whenever an
+    // available one also matches, and the generic `write` always matches, so `unavailable` here
+    // would never fire. Deprecated candidates *are* selected, so the more specific one wins and
+    // carries the reason at compile time. The body traps, so the mistake cannot reach State.
+    // The message repeats `computedIsNotStorable`: an attribute cannot reference a constant.
+
+    @available(*, deprecated, message: """
+    A Computed is derived, not stored. Declare it with @Computed and reach it through its Address \
+    (\\Container.$name).
+    """)
+    public func write<Storage: StateContainer, Key: Hashable, Output>(
+        _ newValue: Computed<Key, Output>,
+        keyPath: WritableKeyPath<Storage, Computed<Key, Output>>
+    ) {
+        preconditionFailure(computedIsNotStorable)
+    }
+
+    @available(*, deprecated, message: """
+    A Computed is derived, not stored. Declare it with @Computed and reach it through its Address \
+    (\\Container.$name).
+    """)
+    public func write<Storage: StateContainer, DictKey: Hashable, Key: Hashable, Output>(
+        _ newValue: Computed<Key, Output>,
+        keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>,
+        key: DictKey
+    ) {
+        preconditionFailure(computedIsNotStorable)
+    }
+
+    @available(*, deprecated, message: """
+    A Computed is derived, not stored. Declare it with @Computed and reach it through its Address \
+    (\\Container.$name).
+    """)
+    public func write<Storage: StateContainer, DictKey: Hashable, Key: Hashable, Output>(
+        _ newValue: [DictKey: Computed<Key, Output>],
+        keyPath: WritableKeyPath<Storage, [DictKey: Computed<Key, Output>]>
+    ) {
+        preconditionFailure(computedIsNotStorable)
     }
 
     /// Drops every Container, Service, and AsyncStrategy. Cancels every in-flight Execution.
