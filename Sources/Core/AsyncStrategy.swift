@@ -46,6 +46,9 @@ extension SourceStatus: Equatable where Failure: Equatable {
 ///
 /// The sourced Address stays live until the Container drops. Kicks are synchronous and return
 /// nothing. Later inbound is ``AsyncStrategyEnvironment/apply(_:keyPath:)`` / `fail`.
+///
+/// > Note: A kick returns immediately, so off-main work goes through `perform` with an
+/// ``AsyncOperation``, never a bare `Task`. See <doc:Concurrency-and-Offloading>.
 @MainActor
 public protocol AsyncStrategy: AnyObject {
     /// Failure type for `$property.status`. Use `Never` if this strategy cannot fail.

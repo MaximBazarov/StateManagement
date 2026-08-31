@@ -26,6 +26,9 @@ import Foundation
 }
 
 /// An Async operation that does not throw.
+///
+/// > Note: The body runs on the main actor. Heavy work goes to an explicitly `nonisolated` async
+/// function that takes and returns `Sendable` data. See <doc:Concurrency-and-Offloading>.
 @MainActor public protocol AsyncOperation {
     /// How overlapping Executions of this Operation are handled. No default. The Environment owns the Execution.
     var reentrancy: ReentrancyDecision { get }

@@ -26,9 +26,8 @@ import Foundation
 ///
 /// > Important: To prevent infinite recursion, the environment automatically tracks the IDs of values the service modifies. Calls to ``serve()`` won't happen if the only value that changed are changed by the service.
 ///
-///
-/// ## Implementation Details
-///  - why subclassing not protocol or anything?
+/// > Note: Subscriptions are one-shot. A Service re-subscribes itself after each run, so it keeps
+/// reacting without re-reading. See <doc:Observing-State>.
 ///
 /// ## Example
 /// ```swift
@@ -202,7 +201,7 @@ import Foundation
     public func getValue<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
-        // Dropped Service must not recreate warehouse State by reading.
+        // A dropped Service must not recreate a Container by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath] }
         let value = env.getValue(keyPath: keyPath)
         env.observation.subscribe(
@@ -219,7 +218,7 @@ import Foundation
         keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
-        // Dropped Service must not recreate warehouse State by reading.
+        // A dropped Service must not recreate a Container by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath][key] }
         let value = env.getValue(keyPath: keyPath, key: key)
         env.observation.subscribe(
@@ -242,7 +241,7 @@ import Foundation
     public func read<Storage: StateContainer, S: AsyncStrategy, Value>(
         _ keyPath: KeyPath<Storage, AsyncState<S, Value, SourceStatus<S.Failure>>>
     ) async throws(S.Failure) -> Value {
-        // Dropped Service must not recreate warehouse State by reading, and must not wait.
+        // A dropped Service must not recreate a Container by reading, and must not wait.
         guard !isDropped else { return Storage()[keyPath: keyPath].storage }
         return try await env.awaitSourced(keyPath) { [weak self] valueID in
             guard let self else { return }

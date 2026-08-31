@@ -116,6 +116,9 @@ import Foundation
     // MARK: - Atomic
 
     /// Snapshots the Value at `keyPath`. Does not subscribe. First read of a sourced Address calls `onRead`.
+    ///
+    /// > Warning: Not for a view. A body that calls `read` shows the value once and never updates
+    /// again. Use ``Watch``.
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
@@ -178,6 +181,9 @@ import Foundation
     // MARK: - Dictionary
 
     /// Snapshots the keyed Value at `keyPath` and `key`. Does not subscribe. First read of a sourced Address calls `onRead`.
+    ///
+    /// > Warning: Not for a view. A body that calls `read` shows the value once and never updates
+    /// again. Use ``Watch``.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key

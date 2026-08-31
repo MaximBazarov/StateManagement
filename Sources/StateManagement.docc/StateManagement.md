@@ -16,9 +16,14 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 
 ### Reading
 
+- <doc:Observing-State>
 - ``Watch``
 - ``SharedEnvironment/read(_:)``
 - ``SharedEnvironment/read(_:key:)``
+
+### Concurrency
+
+- <doc:Concurrency-and-Offloading>
 
 ### Changing
 

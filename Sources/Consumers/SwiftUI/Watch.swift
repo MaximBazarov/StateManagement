@@ -50,6 +50,9 @@ extension ObservableObjectPublisher {
 ///
 /// Output diffing is automatic: when `Value` is `Equatable`, an unchanged output
 /// suppresses the re-render. Non-`Equatable` values always notify.
+///
+/// > Note: Subscriptions are one-shot. `Watch` re-reads in `body`, so it re-subscribes on every
+/// render. See <doc:Observing-State>.
 @propertyWrapper
 @MainActor
 public struct Watch<Storage: StateContainer, Value>: DynamicProperty {

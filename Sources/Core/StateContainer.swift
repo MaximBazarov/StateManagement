@@ -27,7 +27,8 @@ import Foundation
 /// > Note: The instance lives for the lifetime of its ``SharedEnvironment`` (the process, for the
 /// production ``SharedEnvironment/shared``).
 ///
-/// A container mixes three shapes of state:
+/// A Value sits on two independent axes: it is Atomic or Keyed, and it is stored or Computed. That
+/// makes four cases, and a container may mix all four:
 ///
 /// - **Atomic**: a single stored property, addressed by its key path (`\TodoContainer.title`).
 /// - **Keyed**:  a `[Key: Value]` dictionary, addressed by key path *and* a key
