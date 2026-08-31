@@ -74,8 +74,8 @@ import Foundation
 ///
 ///     @Watch(\TodoContainer.title) var title             // atomic
 ///     @Watch(\TodoContainer.done, key: id) var done      // keyed → Bool?
-///     @Watch(\TodoContainer.count) var count             // atomic computed
-///     @Watch(\TodoContainer.isDone, key: id) var isDone  // keyed computed
+///     @Watch(computed: \TodoContainer.$count) var count   // atomic computed
+///     @Watch(\TodoContainer.$isDone, key: id) var isDone  // keyed computed
 ///
 ///     var body: some View { Text(title) }
 /// }

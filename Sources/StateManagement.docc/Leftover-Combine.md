@@ -35,7 +35,7 @@ struct SetTheme: SyncOperation {
 
 Tests that go through leftover Combine use `.shared` plus `reset()`. Tests that Watch or perform Operations use a fresh Environment.
 
-A test that wants a snapshot rather than a subscription reads through `StateReader` in `StateManagementTestingSupport`.
+A test asserts on a Value by reading through `StateReader` in `StateManagementTestingSupport`. That read subscribes; let the reader go out of scope and the subscription goes with it.
 
 ## `$` and `objectWillChange`
 

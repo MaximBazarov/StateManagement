@@ -15,8 +15,8 @@
 #if DEBUG
 import Foundation
 
-/// DEBUG helper that writes one value through ``SyncOperationEnvironment/write(_:value:)``
-/// or one dictionary entry through ``SyncOperationEnvironment/write(_:key:value:)``.
+/// DEBUG helper that writes one value through ``SyncOperationEnvironment/write(_:value:)-(_,Value)``
+/// or one dictionary entry through ``SyncOperationEnvironment/write(_:key:value:)-(_,Key,_)``.
 ///
 /// Prefer named operations in production code. Use ``Write`` in previews and tests with
 /// ``SharedEnvironment/seeded(_:)``, ``SharedEnvironment/seed(_:)``, or

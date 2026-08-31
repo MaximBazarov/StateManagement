@@ -12,7 +12,7 @@ Nothing in the library keeps a standing subscription, and the three readers each
 
 Read once and hold the result and you get one update, not a stream. That is the same trap under three names: a value stashed in a `@State`, a Service that reads only in its setup, a `read` called from a view body.
 
-A read is public only where the caller is known, so every one of them belongs to a Restricted Environment. Outside the package, a snapshot that subscribes nothing is `StateReader` in `StateManagementTestingSupport`.
+A read is public only where the caller is known, so every one of them belongs to a Restricted Environment. Outside the package that is `StateReader` in `StateManagementTestingSupport`, and its reads subscribe like any other Service's. A reader that never reacts just leaves the subscription unused.
 
 ## What this buys
 

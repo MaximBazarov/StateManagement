@@ -120,6 +120,30 @@ struct TestView: View {
     }
 }
 
+/// One view carrying each `@Watch` Address shape. Nothing here asserts behaviour: it fails by not
+/// compiling, which is the only way a wrong Address in a documented example gets caught.
+@MainActor
+struct WatchShapesView: View {
+    let counter: RenderCounter
+
+    @Watch(\TestWatchState.value) var value
+    @Watch(\TestWatchState.dict, key: "A") var dictValue
+    @Watch(computed: \TestWatchState.$parity) var parity
+    @Watch<TestWatchState, Bool> var isSelected: Bool
+
+    /// A property-wrapper argument cannot reach `self`, so today a per-row key arrives through an
+    /// init. Reaching the row off one wrapper instead is [#65](https://github.com/MaximBazarov/SSM-Development/issues/65).
+    init(id: Int, counter: RenderCounter) {
+        self.counter = counter
+        self._isSelected = Watch(\TestWatchState.$isSelected, key: id)
+    }
+
+    var body: some View {
+        let _ = counter.count += 1
+        Text("\(value) \(dictValue ?? "") \(parity) \(isSelected)")
+    }
+}
+
 /// Holds the `Watch.binding` so the test can `set` after the first body, the
 /// same path a SwiftUI control uses.
 @MainActor
@@ -170,6 +194,29 @@ struct WatchTests {
 
         let rendered = await waitUntil { counter.count > before }
         #expect(rendered, "body did not re-evaluate after state change")
+    }
+
+    /// Guards the Address spelling of each `@Watch` shape. A Computed is reached through
+    /// `\C.$name`, because `wrappedValue` is the computation closure, so dropping the `$` binds the
+    /// wrong overload or none at all — which is how the ``StateContainer`` DocC went stale.
+    @Test("Every Watch Address shape resolves against a real Container")
+    func watchAddressShapes() async throws {
+        let env = SharedEnvironment()
+        let counter = RenderCounter()
+
+        let host = HostedView.mount(
+            WatchShapesView(id: 1, counter: counter).sharedEnvironment(env)
+        )
+        defer { host.teardown() }
+
+        #expect(counter.count >= 1)
+
+        let before = counter.count
+        env.perform(SetSelection(id: 1))
+        host.relayout()
+
+        let rendered = await waitUntil { counter.count > before }
+        #expect(rendered, "keyed computed Watch did not re-evaluate body")
     }
 
     /// Binding `set` is a view update. `Watch` must still re-render after that

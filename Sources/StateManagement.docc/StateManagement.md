@@ -18,8 +18,8 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 
 - <doc:Observing-State>
 - ``Watch``
-- ``EnvironmentService/read(_:)``
-- ``EnvironmentService/read(_:key:)``
+- ``EnvironmentService/read(_:)-(KeyPath<Storage,Value>)``
+- ``EnvironmentService/read(_:key:)->Value?``
 
 ### Concurrency
 
