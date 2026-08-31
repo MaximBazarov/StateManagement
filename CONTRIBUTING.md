@@ -4,15 +4,15 @@ Thank you for helping. StateManagement is a foundational library, so the bar is 
 
 ## Before you start
 
-Read [PHILOSOPHY.md](PHILOSOPHY.md) first. Every change is judged against its three pillars: simplicity, composition, and low overhead. If a change adds to the API, it has to earn its place.
+Read [PHILOSOPHY.md](PHILOSOPHY.md) first. Every change is judged against its four pillars: simplicity, composition, low overhead, and single source of truth. If a change adds to the API, it has to earn its place.
 
 The library is pre-1.0. The public API is still in discussion and can change between versions. Expect that.
 
 ## When you need an ADR first
 
-Write an ADR in [`docs/adr/`](docs/adr/) before you write much code if your change touches the public API or the scope. Lead with what you decided and why. Get the verdict, then code.
+A change that touches the public API or the scope needs an ADR before the code. Open an issue with a proposal. Discuss it on this repo. After the issue is accepted, the library developer writes the ADR in [`docs/adr/`](docs/adr/). Then code.
 
-Why first: it saves you from building something we then turn down on a pillar. The review decides the shape before the code exists.
+The review decides the shape before the code exists. That saves you from building something we then turn down on a pillar.
 
 Small changes do not need an ADR. Bug fixes, tests, doc comments, and typo fixes can go straight to a pull request.
 
@@ -32,10 +32,11 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 
 ## Project layout
 
+- `CONTEXT.md` the glossary. Use those names; a word under `_Avoid_` is one we do not use for that concept.
 - `Sources/` the library.
 - `Tests/` the tests.
 - `TestingSupport/` helpers we ship so users can test their own code against the library.
-- `docs/adr/` the ADRs.
+- `docs/adr/` accepted contributor decisions. A README until a proposal is accepted.
 
 ## Code style
 
@@ -64,7 +65,7 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 
 - Branch off `main`.
 - Keep each pull request small and about one thing. Small is easier to review and to reason about, and it lands faster.
-- Link the ADR if your change has one.
+- Link the issue. Link the ADR once the library developer has written it.
 - Make sure the build and tests pass.
 - In the description, say why, not just what.
 

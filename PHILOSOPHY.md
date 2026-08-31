@@ -33,7 +33,7 @@ Every addition, whether a type, a method, a parameter, or a protocol requirement
 3. **Overhead.** What does it cost at run time, at compile time, and in your head? Is that cost worth it for a library everything depends on?
 4. **Single source of truth.** Is there one owner and one value to read, with no drifting copies? Does the name and behavior have exactly one meaning, or can it be read two ways?
 
-A fail on any one gate means no. We record the no (see Decisions below) so we do not argue the same point twice, and the scope stays clear over time.
+A fail on any one gate means no. We record the no as a Non-Goal below, so we do not argue the same point twice, and the scope stays clear over time.
 
 ## Non-Goals
 
@@ -50,6 +50,6 @@ This list will grow as we turn proposals down. Adding to it is a good sign, not 
 
 ## Decisions
 
-The pillars are the values. The concrete choices that follow from them, the proposals we accept and the ones we turn down, live as ADRs in `docs/adr/` so the scope stays predictable. A turned-down feature is usually one short entry that names the pillar it failed.
+The pillars are the values. The concrete choices that follow from them live as ADRs in `docs/adr/` so the scope stays predictable. That folder is an accepted log: a proposal we turn down gets no ADR, it becomes a Non-Goal above that names the pillar it failed.
 
 ADRs are for the people building the library, not its users. They sit apart from the user docs (DocC). DocC shows you how to use the library. This charter and the ADRs explain why it has the shape it has, and what it will not become.
