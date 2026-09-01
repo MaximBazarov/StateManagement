@@ -32,7 +32,7 @@ CounterView()
     .sharedEnvironment(SharedEnvironment())
 ```
 
-A `Computed` derives a Value, a Service reacts, and persistence and HTTP live in a Satellite behind an AsyncStrategy.
+A `Computed` derives a Value, a Service reacts, and a Satellite ships the AsyncStrategy for persistence or HTTP while the Environment owns the seam and holds the Value.
 
 Replace `@Published` with `@SMPublished` to keep leftover Combine call sites while the Environment owns the Value.
 

@@ -37,10 +37,10 @@ A fail on any one gate means no. We record the no as a Non-Goal below, so we do 
 
 ## Non-Goals
 
-These are out of scope on purpose. They are useful. They just do not belong inside a foundational state core. Each one builds on top of the library instead:
+These are out of scope on purpose. They are useful. They just do not belong inside a foundational state core. Each one builds on top of the library instead. Networking and persistence build as a [Satellite](CONTEXT.md).
 
 - **Networking and HTTP.** State can come from a network layer. The library does not provide one.
-- **Persistence and databases.** Saving and loading state is the job of the code that uses the library, not the library.
+- **Persistence and databases.** Saving and loading state happens outside the library.
 - **A dependency injection container.** The library aims to make dependency injection unnecessary, not to provide it. The environment resolves state containers when you need them, so there is nothing to wire up and inject. We are not building a general DI framework, and we will not grow into one.
 - **Machinery to work around our own constraints.** Operations are plain Swift with structured concurrency and normal control flow. We do not add a rule and then build a separate layer to win back what the rule took away. If a rule leaves a real gap, we drop the rule instead of building around it.
 - **Feature bundles.** Anything you can build by combining the parts we have is left to you or to a separate package.
