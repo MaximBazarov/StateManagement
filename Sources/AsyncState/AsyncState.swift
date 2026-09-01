@@ -29,10 +29,11 @@ protocol AsyncStateHandle: AnyObject {
     var dollarKeyPath: AnyKeyPath? { get }
     var wrapperKeyPath: AnyKeyPath? { get }
 
-    func resolveStrategy(in runtime: AsyncStateRuntime) -> any AsyncStrategy
-    func callOnRead(_ strategy: any AsyncStrategy, key: AnyHashable?)
-    func callOnWrite(_ strategy: any AsyncStrategy, key: AnyHashable?)
-    func callOnDrop(_ strategy: any AsyncStrategy, key: AnyHashable?)
+    /// The three kicks. The wrapper knows `S`, so it fetches its own strategy and no erased
+    /// instance travels back through a cast.
+    func kickOnRead(key: AnyHashable?, in runtime: AsyncStateRuntime)
+    func kickOnWrite(key: AnyHashable?, in runtime: AsyncStateRuntime)
+    func kickOnDrop(key: AnyHashable?, in runtime: AsyncStateRuntime)
     func settleAfterAppWrite(key: AnyHashable?)
     func seedPendingStatus(key: AnyHashable?)
     func evictStatus(key: AnyHashable)
@@ -233,23 +234,16 @@ public final class AsyncState<S: AsyncStrategy, Key: Hashable, Entry, Value> {
 
 extension AsyncState: AsyncStateHandle {
 
-    func resolveStrategy(in runtime: AsyncStateRuntime) -> any AsyncStrategy {
-        runtime.strategyInstance(S.self)
+    func kickOnRead(key: AnyHashable?, in runtime: AsyncStateRuntime) {
+        onReadKick?(runtime.strategyInstance(S.self), key)
     }
 
-    func callOnRead(_ strategy: any AsyncStrategy, key: AnyHashable?) {
-        guard let typed = strategy as? S else { return }
-        onReadKick?(typed, key)
+    func kickOnWrite(key: AnyHashable?, in runtime: AsyncStateRuntime) {
+        onWriteKick?(runtime.strategyInstance(S.self), key)
     }
 
-    func callOnWrite(_ strategy: any AsyncStrategy, key: AnyHashable?) {
-        guard let typed = strategy as? S else { return }
-        onWriteKick?(typed, key)
-    }
-
-    func callOnDrop(_ strategy: any AsyncStrategy, key: AnyHashable?) {
-        guard let typed = strategy as? S else { return }
-        onDropKick?(typed, key)
+    func kickOnDrop(key: AnyHashable?, in runtime: AsyncStateRuntime) {
+        onDropKick?(runtime.strategyInstance(S.self), key)
     }
 
     func settleAfterAppWrite(key: AnyHashable?) {

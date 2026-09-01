@@ -194,6 +194,23 @@ struct AsyncStateEvictionTests {
         #expect(env.read(\ShapeKeyedBox.$flags).status["a"] == .settled)
     }
 
+    /// Inbound is not a read. A strategy that applies from a push reaches an Address nobody has
+    /// read, and opening its record must not turn into a load.
+    @Test("Inbound on an Address nobody has read does not call onRead")
+    func inboundOnAnUnreadAddressDoesNotKick() {
+        let env = SharedEnvironment()
+        let strategy = env.strategyUnderTest(MockStrategy.self)
+
+        strategy.env.apply(\ShapeKeyedBox.$flags, key: "a", value: true)
+
+        #expect(strategy.keyedOnReadCount == 0)
+        #expect(env.read(\ShapeKeyedBox.$flags).status["a"] == .settled)
+
+        // Still the first read of that Address, so it kicks now.
+        #expect(env.read(\ShapeKeyedBox.flags, key: "a") == true)
+        #expect(strategy.keyedOnReadCount == 1)
+    }
+
     @Test("markStale(keys:) fires one observation round")
     func markStaleOfManyKeysFiresOneRound() {
         let env = SharedEnvironment()

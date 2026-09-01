@@ -146,12 +146,8 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            asyncState.pendingHandle = nil
-            asyncState.capturingHandle {
+            asyncState.writing(keyPath, key: nil) {
                 storage[keyPath: keyPath] = newValue
-            }
-            if let handle = asyncState.pendingHandle {
-                asyncState.finishAppWrite(handle, keyPath: keyPath, key: nil)
             }
             let valueID = ValueID(
                 keyPath: keyPath
@@ -192,12 +188,8 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            asyncState.pendingHandle = nil
-            asyncState.capturingHandle {
+            asyncState.writing(keyPath, key: AnyHashable(key)) {
                 storage[keyPath: keyPath][key] = newValue
-            }
-            if let handle = asyncState.pendingHandle {
-                asyncState.finishAppWrite(handle, keyPath: keyPath, key: AnyHashable(key))
             }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)
@@ -233,12 +225,8 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            asyncState.pendingHandle = nil
-            asyncState.capturingHandle {
+            asyncState.removing(keyPath, key: AnyHashable(key)) {
                 storage[keyPath: keyPath][key] = nil
-            }
-            if let handle = asyncState.pendingHandle {
-                asyncState.evict(handle, keyPath: keyPath, key: AnyHashable(key))
             }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)

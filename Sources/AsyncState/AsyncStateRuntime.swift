@@ -75,7 +75,7 @@ final class AsyncStateRuntime {
     private var records: [ValueID: StrategyRecord] = [:]
 
     /// The wrapper the key-path walk in flight went through, if any.
-    var pendingHandle: (any AsyncStateHandle)?
+    private var pendingHandle: (any AsyncStateHandle)?
 
     private var standingEnvironment: AsyncStrategyEnvironment?
 
@@ -99,7 +99,7 @@ final class AsyncStateRuntime {
     }
 
     /// Runs `body` with handle capture armed, so a wrapper read inside it registers itself.
-    func capturingHandle(_ body: () -> Void) {
+    private func capturingHandle(_ body: () -> Void) {
         let previous = StrategyAccess.current
         StrategyAccess.current = self
         body()
@@ -209,7 +209,32 @@ final class AsyncStateRuntime {
 
     // MARK: - The sourced branch of write
 
-    func finishAppWrite<Storage: StateContainer, Value>(
+    /// Runs an app write with handle capture armed, then settles and kicks `onWrite` if the
+    /// Address turned out to be sourced. A plain Address costs the capture and nothing else.
+    func writing<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>,
+        key: AnyHashable?,
+        mutate: () -> Void
+    ) {
+        pendingHandle = nil
+        capturingHandle(mutate)
+        guard let handle = pendingHandle else { return }
+        finishAppWrite(handle, keyPath: keyPath, key: key)
+    }
+
+    /// Runs an app `remove` the same way, evicting rather than telling the strategy.
+    func removing<Storage: StateContainer, Value>(
+        _ keyPath: KeyPath<Storage, Value>,
+        key: AnyHashable,
+        mutate: () -> Void
+    ) {
+        pendingHandle = nil
+        capturingHandle(mutate)
+        guard let handle = pendingHandle else { return }
+        evict(handle, keyPath: keyPath, key: key)
+    }
+
+    private func finishAppWrite<Storage: StateContainer, Value>(
         _ handle: any AsyncStateHandle,
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable?
@@ -223,13 +248,13 @@ final class AsyncStateRuntime {
         if let statusID = record.statusID {
             environment.observation.invalidateValue(at: statusID)
         }
-        handle.callOnWrite(handle.resolveStrategy(in: self), key: key)
+        handle.kickOnWrite(key: key, in: self)
     }
 
     /// `remove` on a sourced keyed Address evicts: the entry is already gone, the status goes back
     /// to `.pending`, that key's record is dropped and its waiters released, and nothing is kicked
     /// outward. The next read is a first read and reloads.
-    func evict<Storage: StateContainer, Value>(
+    private func evict<Storage: StateContainer, Value>(
         _ handle: any AsyncStateHandle,
         keyPath: KeyPath<Storage, Value>,
         key: AnyHashable
@@ -326,12 +351,27 @@ final class AsyncStateRuntime {
             match.sourcedID = id
             return match
         }
-        _ = sourcedWrapper(keyPath: keyPath, key: key)
+        bindWrapper(keyPath: keyPath, key: key)
         if let record = records[id] {
             return record
         }
         return uniqueRecords.first { record in
             record.key == key && Self.addressMatches(record.handle, keyPath: keyPath)
+        }
+    }
+
+    /// Opens the record for an Address inbound reached before anyone read it — an `apply` from a
+    /// push, say. It binds and records but does not activate: inbound is not a read, so it must
+    /// not kick `onRead`, and `didRead` stays false so the first real read still does (R17).
+    private func bindWrapper<Storage: StateContainer, Value>(
+        keyPath: KeyPath<Storage, Value>,
+        key: AnyHashable?
+    ) {
+        _ = withHandle(environment.getStorage(Storage.self), keyPath: keyPath) { handle in
+            handle.bind(environment: environment)
+            let valueID = makeValueID(keyPath: keyPath, key: key)
+            _ = record(for: handle, valueID: valueID, keyPath: keyPath, key: key)
+            handle.seedPendingStatus(key: key)
         }
     }
 
@@ -371,7 +411,7 @@ final class AsyncStateRuntime {
     // MARK: - Kicks and notification
 
     func kickOnRead(_ record: StrategyRecord) {
-        record.handle.callOnRead(record.handle.resolveStrategy(in: self), key: record.key)
+        record.handle.kickOnRead(key: record.key, in: self)
     }
 
     private func notify(_ record: StrategyRecord?) {
@@ -539,6 +579,6 @@ final class AsyncStateRuntime {
     private func endRecord(_ record: StrategyRecord) {
         // Cancel is not a throw: a hanging awaitable read returns the current Value.
         record.resumeWaiters(with: .released)
-        record.handle.callOnDrop(record.handle.resolveStrategy(in: self), key: record.key)
+        record.handle.kickOnDrop(key: record.key, in: self)
     }
 }
