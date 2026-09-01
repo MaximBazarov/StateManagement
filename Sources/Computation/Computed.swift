@@ -14,14 +14,6 @@
 
 import Foundation
 
-/// The key type of an atomic (non-keyed) ``Computed``.
-///
-/// You never write this yourself: a single-argument `@Computed` closure infers it. It only shows up
-/// in the inferred type `Computed<NoKey, Output>` and in diagnostics.
-public enum NoKey: Hashable {
-    case noKey
-}
-
 /// Spots a ``Computed`` behind a generic `Value`, so a write route can refuse one it could not
 /// reject at compile time. See ADR 0023.
 ///

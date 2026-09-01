@@ -57,7 +57,8 @@ extension ObservableObjectPublisher {
 @MainActor
 public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
 
-    @Environment(\.sharedEnvironment) private var environment
+    // Internal, not private: `Watch.refresh()` is an AsyncState counterpart and lives in that area.
+    @Environment(\.sharedEnvironment) var environment
 
     /// SwiftUI friendly way to store the reader, that will not recreate for the same view.
     /// For SwiftUI code only we extend `SubscribingValueReader` with ObservableObject conformance and we connect the `onChange` in `watching` function.
@@ -104,16 +105,6 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
                 )
             }
         )
-    }
-
-    /// Marks the watched sourced Address Stale and calls `onRead` again.
-    ///
-    /// Synchronous. The status does not change until the strategy calls `apply` or `fail`, so the
-    /// body keeps rendering the current Value while the reload runs. A keyed Watch refreshes its
-    /// own key. No-op (logged) when the watched Address is not backed by an AsyncStrategy, or
-    /// before the first body read.
-    public func refresh() {
-        environment.refreshAddress(valueID: reader.valueID)
     }
 
     // MARK: - Internals
