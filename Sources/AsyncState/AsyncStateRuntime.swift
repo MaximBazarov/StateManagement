@@ -62,15 +62,15 @@ final class StrategyRecord {
 /// the sourced branch of read and write.
 ///
 /// ``SharedEnvironment`` keeps one `let` to this and forwards; everything the seam owns lives
-/// here, so `strategyWarehouse`, `pendingHandle`, and the record table never become public API.
+/// here, so `strategies`, `pendingHandle`, and the record table never become public API.
 @MainActor
 final class AsyncStateRuntime {
 
     /// The Environment this runtime serves. It owns the runtime, so the reference is unowned.
     unowned let environment: SharedEnvironment
 
-    /// One instance per concrete strategy type. The type is the warehouse key.
-    private var strategyWarehouse: [ObjectIdentifier: any AsyncStrategy] = [:]
+    /// One instance per concrete strategy type, which is the key.
+    private var strategies: [ObjectIdentifier: any AsyncStrategy] = [:]
 
     private var records: [ValueID: StrategyRecord] = [:]
 
@@ -261,6 +261,7 @@ final class AsyncStateRuntime {
     ) {
         handle.evictStatus(key: key)
         let valueID = makeValueID(keyPath: keyPath, key: key)
+        // No record means the key was never loaded, so the status eviction above is the whole job.
         guard let record = records[valueID] else { return }
         record.resumeWaiters(with: .released)
         for address in record.addresses {
@@ -394,17 +395,16 @@ final class AsyncStateRuntime {
     }
 
     func install<Str: AsyncStrategy>(_ strategy: Str) {
-        strategyWarehouse[ObjectIdentifier(Str.self)] = strategy
+        strategies[ObjectIdentifier(Str.self)] = strategy
     }
 
     func strategyInstance<Str: AsyncStrategy>(_ type: Str.Type) -> Str {
         let id = ObjectIdentifier(Str.self)
-        if let existing = strategyWarehouse[id] {
-            // Type is keyed by ObjectIdentifier of Str.self.
-            return unsafeDowncast(existing, to: Str.self)
+        if let existing = strategies[id] as? Str {
+            return existing
         }
         let created = Str(env: strategyEnvironment())
-        strategyWarehouse[id] = created
+        strategies[id] = created
         return created
     }
 
@@ -539,7 +539,7 @@ final class AsyncStateRuntime {
 
     func resetAll() {
         dropAllRecords()
-        strategyWarehouse.removeAll()
+        strategies.removeAll()
     }
 
     func dropAllRecords() {

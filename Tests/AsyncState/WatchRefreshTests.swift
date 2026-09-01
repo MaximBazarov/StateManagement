@@ -47,14 +47,6 @@ struct WatchRefreshView: View {
     }
 }
 
-extension SharedEnvironment {
-    fileprivate func strategyUnderTest<S: AsyncStrategy>(_ type: S.Type) -> S {
-        let created = S(env: strategyEnvironment())
-        install(created)
-        return created
-    }
-}
-
 #endif
 
 /// `Watch.$property.refresh()` is the second call site of the refresh Operation: the same

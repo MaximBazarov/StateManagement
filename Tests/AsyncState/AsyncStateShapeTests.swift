@@ -72,14 +72,6 @@ struct SeedFlag: SyncOperation {
     }
 }
 
-extension SharedEnvironment {
-    fileprivate func strategyUnderTest<S: AsyncStrategy>(_ type: S.Type) -> S {
-        let created = S(env: strategyEnvironment())
-        install(created)
-        return created
-    }
-}
-
 // MARK: - The read path split
 
 @Suite @MainActor

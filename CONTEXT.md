@@ -74,6 +74,10 @@ _Avoid_: Bind, Binding, Parameters (when you mean this), using Policy as a secon
 Whether an Address backed by an AsyncStrategy holds an accepted Value. `$property.status`: pending (seed only), settled (applied or written), error (last `fail`). Not an Operation.
 _Avoid_: Source status, AsyncStatus, wrapping the sourced Value in a status enum, fetchStatus, revalidation flag, `.value` (when you mean settled), treating `$property` as a Value, persist-out or Execution as this status
 
+**Kick**:
+One call from the Environment out to an AsyncStrategy: `onRead`, `onWrite`, or `onDrop`, for one Address and at most one key. The Environment kicks; the strategy answers with an inbound verb.
+_Avoid_: fire, trigger, dispatch, notify (when you mean this), calling a kick a callback or a hook
+
 **Stale**:
 A dirty mark on an Address backed by an AsyncStrategy. No Value write. The next read calls `onRead`.
 _Avoid_: clear (when you mean this), reset, unbind, Source update, invalidate (when you mean this mark), Refresh (when you mean the mark and not the verb)

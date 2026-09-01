@@ -124,7 +124,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
 
     // MARK: - Initialisers -
 
-    // Atomic (Equatable: diffs)
+    /// Watches an Atomic Value. Equatable, so an unchanged Value does not re-render.
     public init(
         _ statePath: KeyPath<Storage, Value>,
         file: String = #fileID,
@@ -138,7 +138,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Atomic (non-Equatable: always notify)
+    /// Watches an Atomic Value that cannot be diffed, so every notification re-renders.
     public init(
         _ statePath: KeyPath<Storage, Value>,
         file: String = #fileID,
@@ -151,7 +151,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Whole Dictionary State (Equatable entries: diffs)
+    /// Watches a whole dictionary Value. The Address names the dictionary, not an entry, so a
+    /// sourced dictionary does not kick `onRead` here. Equatable entries, so the dictionary diffs.
     public init<Key: Hashable, Entry: Equatable>(
         _ statePath: KeyPath<Storage, [Key: Entry]>,
         file: String = #fileID,
@@ -164,7 +165,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Whole Dictionary State (non-Equatable entries: always notify)
+    /// Watches a whole dictionary Value whose entries cannot be diffed, so every notification
+    /// re-renders. Like its Equatable twin, naming the dictionary kicks nothing.
     public init<Key: Hashable, Entry>(
         _ statePath: KeyPath<Storage, [Key: Entry]>,
         file: String = #fileID,
@@ -177,7 +179,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Keyed Dictionary State (Equatable output: diffs)
+    /// Watches one entry of a dictionary Value. Equatable, so an unchanged entry does not
+    /// re-render. `nil` while the key is absent.
     public init<Key: Hashable, Output: Equatable>(
         _ statePath: KeyPath<Storage, [Key: Output]>,
         key: Key,
@@ -191,7 +194,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Keyed Dictionary State (non-Equatable output: always notify)
+    /// Watches one entry of a dictionary Value that cannot be diffed, so every notification
+    /// re-renders.
     public init<Key: Hashable, Output>(
         _ statePath: KeyPath<Storage, [Key: Output]>,
         key: Key,
@@ -205,7 +209,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Computed (Equatable: diffs)
+    /// Watches an Atomic ``Computed``. Equatable, so an unchanged output does not re-render.
     public init(
         computed statePath: KeyPath<Storage, Computed<NoKey, Value>>,
         file: String = #fileID,
@@ -218,7 +222,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Computed (non-Equatable: always notify)
+    /// Watches an Atomic ``Computed`` whose output cannot be diffed, so every recompute
+    /// re-renders.
     public init(
         computed statePath: KeyPath<Storage, Computed<NoKey, Value>>,
         file: String = #fileID,
@@ -231,7 +236,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Computed Keyed (Equatable: diffs)
+    /// Watches one key of a Keyed ``Computed``. Equatable, so an unchanged output does not
+    /// re-render.
     public init<Key: Hashable>(
         _ statePath: KeyPath<Storage, Computed<Key, Value>>,
         key: Key,
@@ -246,7 +252,8 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
-    // Computed Keyed (non-Equatable: always notify)
+    /// Watches one key of a Keyed ``Computed`` whose output cannot be diffed, so every recompute
+    /// re-renders.
     public init<Key: Hashable>(
         _ statePath: KeyPath<Storage, Computed<Key, Value>>,
         key: Key,

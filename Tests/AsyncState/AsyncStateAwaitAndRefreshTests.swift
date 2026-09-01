@@ -168,15 +168,6 @@ struct ResetEverything: SyncOperation {
     }
 }
 
-extension SharedEnvironment {
-    /// Installs the strategy up front so the test can assert on the instance the Environment uses.
-    fileprivate func strategyUnderTest<S: AsyncStrategy>(_ type: S.Type) -> S {
-        let created = S(env: strategyEnvironment())
-        install(created)
-        return created
-    }
-}
-
 // MARK: - Awaitable read
 
 @Suite @MainActor

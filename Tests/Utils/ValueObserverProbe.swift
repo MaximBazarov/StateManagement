@@ -160,6 +160,16 @@ extension ValueObserverProbe {
 
 extension ValueObserverProbe {
 
+    /// Simulates whole-dictionary `@Watch(dictPath)` and renders once.
+    static func watchDictionary<Key: Hashable, Entry: Equatable>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>,
+        in environment: SharedEnvironment = SharedEnvironment()
+    ) -> ValueObserverProbe where Value == [Key: Entry] {
+        let probe = ValueObserverProbe(environment, observer: .observingDictionary(statePath))
+        probe.render()
+        return probe
+    }
+
     /// Simulates keyed `@Watch(dictPath, key:)` and renders once.
     static func watchKeyed<Key: Hashable, Output: Equatable>(
         _ statePath: KeyPath<Storage, [Key: Output]>,
@@ -175,6 +185,16 @@ extension ValueObserverProbe {
 // MARK: - Non-Equatable factories (always-notify overloads)
 
 extension ValueObserverProbe {
+
+    /// Non-Equatable whole dictionary: always notify.
+    static func watchDictionaryRaw<Key: Hashable, Entry>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>,
+        in environment: SharedEnvironment = SharedEnvironment()
+    ) -> ValueObserverProbe where Value == [Key: Entry] {
+        let probe = ValueObserverProbe(environment, observer: .observingDictionary(statePath))
+        probe.render()
+        return probe
+    }
 
     /// Non-Equatable keyed dictionary: always notify.
     static func watchKeyedRaw<Key: Hashable, Output>(
