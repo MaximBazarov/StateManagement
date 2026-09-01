@@ -25,8 +25,8 @@ import Foundation
 
     public init() {}
 
-    /// Non-nil while `getValue` / `setValue` / `removeValue` is on the warehouse instance.
-    /// Leftover Combine uses this mark to tell Watch/getValue apart from `instance.thisValue`.
+    /// Non-nil while `read` / `write` / `remove` is on the warehouse instance.
+    /// Leftover Combine uses this mark to tell an Environment read apart from `instance.thisValue`.
     static var warehouseAccess: SharedEnvironment?
 
     /// Cache of the ``StateContainer`` that has been read.
@@ -122,13 +122,6 @@ import Foundation
     func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
-        getValue(keyPath: keyPath)
-    }
-
-    /// Returns the value at the given key path from shared storage.
-    func getValue<Storage: StateContainer, Value>(
-        keyPath: KeyPath<Storage, Value>
-    ) -> Value {
         withWarehouseAccess {
             let storage = getStorage(Storage.self)
             return accessSourced(storage, keyPath: keyPath, key: nil)
@@ -136,7 +129,7 @@ import Foundation
     }
 
     /// Activates a sourced Address through its `$` Address, with the key when Keyed.
-    /// Same first-read / dirty-read `onRead` rules as ``getValue(keyPath:)``.
+    /// Same first-read / dirty-read `onRead` rules as ``read(_:)``.
     func getSourcedWrapper<Storage: StateContainer, Wrapper>(
         keyPath: KeyPath<Storage, Wrapper>,
         key: AnyHashable?
@@ -148,9 +141,9 @@ import Foundation
     }
 
     /// Sets a value at the given key path and reports a change for observation.
-    func setValue<Storage: StateContainer, Value>(
-        _ newValue: Value,
-        keyPath: WritableKeyPath<Storage, Value>
+    func write<Storage: StateContainer, Value>(
+        _ keyPath: WritableKeyPath<Storage, Value>,
+        value newValue: Value
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
@@ -187,14 +180,6 @@ import Foundation
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
-        getValue(keyPath: keyPath, key: key)
-    }
-
-    /// Returns a value in a dictionary stored at the given key path.
-    func getValue<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: KeyPath<Storage, [Key: Value]>,
-        key: Key
-    ) -> Value? {
         withWarehouseAccess {
             let storage = getStorage(Storage.self)
             _ = accessSourced(storage, keyPath: keyPath, key: AnyHashable(key))
@@ -203,10 +188,10 @@ import Foundation
     }
 
     /// Sets a dictionary value for the given key and reports a change for observation.
-    func setValue<Storage: StateContainer, Key: Hashable, Value>(
-        _ newValue: Value,
-        keyPath: WritableKeyPath<Storage, [Key: Value]>,
-        key: Key
+    func write<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: WritableKeyPath<Storage, [Key: Value]>,
+        key: Key,
+        value newValue: Value
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
@@ -240,8 +225,8 @@ import Foundation
     /// Unlike rewriting the whole dictionary at its base key path, this invalidates the *keyed*
     /// ``ValueID`` so receivers watching that specific key are notified (and flushed), and any
     /// computation depending on the key is re-evaluated.
-    func removeValue<Storage: StateContainer, Key: Hashable, Value>(
-        keyPath: WritableKeyPath<Storage, [Key: Value]>,
+    func remove<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
         withWarehouseAccess {

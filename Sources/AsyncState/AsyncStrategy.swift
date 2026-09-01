@@ -16,7 +16,7 @@ import Foundation
 
 /// Companion status at `$property.status`. It does not carry the sourced Value.
 public enum SourceStatus<Failure: Error>: Sendable {
-    /// Seed is showing. No successful `apply` yet, or `restoreSeed` restored the seed.
+    /// Seed is showing. No successful `apply` yet.
     case pending
     /// A Value has been applied. Stays settled while dirty.
     case settled

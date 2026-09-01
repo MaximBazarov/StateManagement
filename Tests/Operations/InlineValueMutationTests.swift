@@ -49,7 +49,7 @@ struct InlineValueMutationTests {
         }
         env.perform(op)
 
-        #expect(env.getValue(keyPath: \IVMState.x) == 42)
+        #expect(env.read(\IVMState.x) == 42)
     }
 
     /// Reads inside the mutation see current state, so it can read-modify-write.
@@ -63,7 +63,7 @@ struct InlineValueMutationTests {
         }
         env.perform(op)
 
-        #expect(env.getValue(keyPath: \IVMState.x) == 15)
+        #expect(env.read(\IVMState.x) == 15)
     }
 
     /// Two writes to the same value in one operation notify the subscriber once.
@@ -79,7 +79,7 @@ struct InlineValueMutationTests {
         env.perform(DoubleWrite())
 
         #expect(callCount == 1)
-        #expect(env.getValue(keyPath: \IVMState.x) == 2)
+        #expect(env.read(\IVMState.x) == 2)
     }
 }
 

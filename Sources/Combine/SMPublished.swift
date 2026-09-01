@@ -60,7 +60,7 @@ import Foundation
             if SharedEnvironment.warehouseAccess != nil {
                 return object[keyPath: storageKeyPath].stored
             }
-            return SharedEnvironment.shared.getValue(keyPath: wrappedKeyPath)
+            return SharedEnvironment.shared.read(wrappedKeyPath)
         }
         set {
             if let env = SharedEnvironment.warehouseAccess {

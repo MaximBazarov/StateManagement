@@ -56,7 +56,7 @@ import Foundation
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         let targetValueID = ValueID(keyPath: keyPath)
-        let value = env.getValue(keyPath: keyPath)
+        let value = env.read(keyPath)
         env.observation.register(dependent: dependent, on: targetValueID)
         subscribe(to: targetValueID)
         return value
@@ -68,7 +68,7 @@ import Foundation
         key: Key
     ) -> Value? {
         let targetValueID = ValueID(keyPath: keyPath, key: key)
-        let value = env.getValue(keyPath: keyPath, key: key)
+        let value = env.read(keyPath, key: key)
         env.observation.register(dependent: dependent, on: targetValueID)
         subscribe(to: targetValueID)
         return value
@@ -79,7 +79,7 @@ import Foundation
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         let innerID = ValueID(keyPath: keyPath)
-        let computation = env.getValue(keyPath: keyPath)
+        let computation = env.read(keyPath)
         let value = computation.read(
             env: env,
             valueID: innerID,
@@ -97,7 +97,7 @@ import Foundation
         key: Key
     ) -> Output {
         let innerID = ValueID(keyPath: keyPath, key: key)
-        let computation = env.getValue(keyPath: keyPath)
+        let computation = env.read(keyPath)
         let value = computation.read(
             env: env,
             valueID: innerID,

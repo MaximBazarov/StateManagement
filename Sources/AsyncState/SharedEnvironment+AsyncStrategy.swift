@@ -327,26 +327,6 @@ extension SharedEnvironment {
         }
     }
 
-    func applyStrategyRestoreSeed<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
-    ) {
-        let record = recordMatching(keyPath: keyPath, key: nil)
-        record?.handle.writeClear(key: nil)
-        record?.dirty = false
-        notifyStrategy(record)
-    }
-
-    func applyStrategyKeyedRestoreSeed<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
-        key: Key
-    ) {
-        let anyKey = AnyHashable(key)
-        let record = recordMatching(keyPath: keyPath, key: anyKey)
-        record?.handle.writeClear(key: anyKey)
-        record?.dirty = false
-        notifyStrategy(record)
-    }
-
     func applyStrategyMarkStale<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
         keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
     ) {
@@ -384,7 +364,7 @@ extension SharedEnvironment {
             match.sourcedID = id
             return match
         }
-        _ = getValue(keyPath: keyPath)
+        _ = read(keyPath)
         if let record = strategyRecords[id] {
             return record
         }

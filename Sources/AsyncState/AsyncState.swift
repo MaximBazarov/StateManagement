@@ -50,7 +50,6 @@ protocol AsyncStateHandle: AnyObject {
     func writeDeliver<Key: Hashable, Output>(_ value: Output, key: Key)
     func writeKeyedSettled<Key: Hashable>(key: Key)
     func writeFail(_ error: any Error, key: AnyHashable?)
-    func writeClear(key: AnyHashable?)
     func seedKeyedPending(key: AnyHashable?)
     func bind(environment: SharedEnvironment)
 }
@@ -80,7 +79,6 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
     var onWriteAtomic: ((S, Value) -> Void)?
     var onDropOpener: ((S, AnyHashable?) -> Void)?
     var failWriter: ((any Error, AnyHashable?) -> Void)?
-    var clearWriter: ((AnyHashable?) -> Void)?
     var seedPending: ((AnyHashable?) -> Void)?
     /// Typed keyed kick/inbound. Existential because `Key`/`Output` are the keyed init's generics.
     private var keyedIO: KeyedIOBase?
@@ -218,9 +216,6 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
         self.failWriter = { [weak self] error, _ in
             self?.writeAtomicFail(error)
         }
-        self.clearWriter = { [weak self] _ in
-            self?.writeAtomicClear()
-        }
     }
 
     /// Keyed sourced Value. Per-key status starts missing and is seeded `.pending` on first read.
@@ -262,11 +257,6 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
                 preconditionFailure("AsyncStrategy fail type \(type(of: error)), expected \(S.Failure.self)")
             }
             self.statusStorage[typedKey] = .error(typed)
-        }
-        self.clearWriter = { [weak self] key in
-            guard let self, let typedKey = key?.base as? Key else { return }
-            self.storage[typedKey] = self.seed[typedKey]
-            self.statusStorage[typedKey] = .pending
         }
         self.seedPending = { [weak self] key in
             guard let self, let typedKey = key?.base as? Key else { return }
@@ -446,12 +436,6 @@ public final class AsyncState<S: AsyncStrategy, Value, Status> {
         }
     }
 
-    private func writeAtomicClear() {
-        storage = seed
-        if let next = SourceStatus<S.Failure>.pending as? Status {
-            statusStorage = next
-        }
-    }
 }
 
 extension AsyncState: AsyncStateHandle {
@@ -505,10 +489,6 @@ extension AsyncState: AsyncStateHandle {
 
     func writeFail(_ error: any Error, key: AnyHashable?) {
         failWriter?(error, key)
-    }
-
-    func writeClear(key: AnyHashable?) {
-        clearWriter?(key)
     }
 
     func seedKeyedPending(key: AnyHashable?) {

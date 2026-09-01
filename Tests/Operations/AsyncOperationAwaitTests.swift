@@ -104,7 +104,7 @@ struct AsyncOperationAwaitTests {
 
         await env.perform(AAAsyncSet(value: 5))
 
-        #expect(env.getValue(keyPath: \AAState.x) == 5)
+        #expect(env.read(\AAState.x) == 5)
     }
 
     /// After awaiting, the sync child's notification has already fired: a
@@ -133,7 +133,7 @@ struct AsyncOperationAwaitTests {
 
         await env.perform(AAAsyncSuspendThenSet(value: 9))
 
-        #expect(env.getValue(keyPath: \AAState.x) == 9)
+        #expect(env.read(\AAState.x) == 9)
     }
 }
 

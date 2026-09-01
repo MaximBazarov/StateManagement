@@ -74,7 +74,7 @@ private let syncOperationLogger = Logger(
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
-        environment.getValue(keyPath: keyPath)
+        environment.read(keyPath)
     }
 
     public func write<Storage: StateContainer, Value>(
@@ -86,7 +86,7 @@ private let syncOperationLogger = Logger(
             syncOperationLogger.debug("Nested strategy perform has no write")
             return
         }
-        environment.setValue(newValue, keyPath: keyPath)
+        environment.write(keyPath, value: newValue)
     }
 
     // MARK: - Computed
@@ -97,7 +97,7 @@ private let syncOperationLogger = Logger(
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         environment
-            .getValue(keyPath: keyPath)
+            .read(keyPath)
             .read(
                 env: environment,
                 valueID: ValueID(keyPath: keyPath),
@@ -112,7 +112,7 @@ private let syncOperationLogger = Logger(
         key: Key
     ) -> Output {
         environment
-            .getValue(keyPath: keyPath)
+            .read(keyPath)
             .read(
                 env: environment,
                 valueID: ValueID(keyPath: keyPath, key: key),
@@ -128,7 +128,7 @@ private let syncOperationLogger = Logger(
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
-        environment.getValue(keyPath: keyPath, key: key)
+        environment.read(keyPath, key: key)
     }
 
     /// Sets a dictionary value for the given key and reports a change for observation.
@@ -142,7 +142,7 @@ private let syncOperationLogger = Logger(
             syncOperationLogger.debug("Nested strategy perform has no write")
             return
         }
-        environment.setValue(newValue, keyPath: keyPath, key: key)
+        environment.write(keyPath, key: key, value: newValue)
     }
 
     /// Removes a dictionary value for the given key and reports a change for observation.
@@ -157,7 +157,7 @@ private let syncOperationLogger = Logger(
             syncOperationLogger.debug("Nested strategy perform has no write")
             return
         }
-        environment.removeValue(keyPath: keyPath, key: key)
+        environment.remove(keyPath, key: key)
     }
 
     // MARK: - A Computed is not storable

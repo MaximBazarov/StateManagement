@@ -103,7 +103,7 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader {
         let valueID = ValueID(keyPath: statePath)
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
-            let value = env.getValue(keyPath: statePath)
+            let value = env.read(statePath)
             env.observation.subscribe(receiver: receiver, valueID: valueID)
             return value
         }
@@ -144,7 +144,7 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader where Value == Output? {
         let valueID = ValueID(keyPath: statePath, key: AnyHashable(key))
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
-            let value = env.getValue(keyPath: statePath, key: key)
+            let value = env.read(statePath, key: key)
             env.observation.subscribe(receiver: receiver, valueID: valueID)
             return value
         }
@@ -167,7 +167,7 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader {
         let valueID = ValueID(keyPath: statePath)
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
-            let computation = env.getValue(keyPath: statePath)
+            let computation = env.read(statePath)
             return computation.read(env: env, valueID: valueID, receiver: receiver, key: .noKey)
         }
     }
@@ -195,7 +195,7 @@ extension SubscribingValueReader {
     ) -> SubscribingValueReader {
         let valueID = ValueID(keyPath: statePath, key: AnyHashable(key))
         return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
-            let computation = env.getValue(keyPath: statePath)
+            let computation = env.read(statePath)
             return computation.read(env: env, valueID: valueID, receiver: receiver, key: key)
         }
     }

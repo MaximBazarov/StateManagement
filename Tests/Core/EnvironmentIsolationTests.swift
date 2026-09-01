@@ -52,16 +52,16 @@ struct EnvironmentIsolationTests {
 
         a.perform(IsoSetX(value: 5))
 
-        #expect(a.getValue(keyPath: \IsoState.x) == 5)
-        #expect(b.getValue(keyPath: \IsoState.x) == 0)
+        #expect(a.read(\IsoState.x) == 5)
+        #expect(b.read(\IsoState.x) == 0)
     }
 
     /// A container is created lazily on first read and returns the stored-property
     /// default, no operation required.
     @Test func lazyContainerReturnsDefault() {
         let env = SharedEnvironment()
-        #expect(env.getValue(keyPath: \IsoState.x) == 0)
-        #expect(env.getValue(keyPath: \IsoOther.y) == 100)
+        #expect(env.read(\IsoState.x) == 0)
+        #expect(env.read(\IsoOther.y) == 100)
     }
 
     /// Distinct container types live side by side without cross-type pollution.
@@ -70,7 +70,7 @@ struct EnvironmentIsolationTests {
 
         env.perform(IsoSetX(value: 5))
 
-        #expect(env.getValue(keyPath: \IsoState.x) == 5)
-        #expect(env.getValue(keyPath: \IsoOther.y) == 100)
+        #expect(env.read(\IsoState.x) == 5)
+        #expect(env.read(\IsoOther.y) == 100)
     }
 }

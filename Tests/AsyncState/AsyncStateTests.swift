@@ -379,21 +379,6 @@ struct AsyncStateApplyTests {
         status.expect(value: .error(.boom))
     }
 
-    @Test("restoreSeed writes the seed and pending")
-    func restoreSeedRestoresSeedAndPending() {
-        let env = SharedEnvironment()
-        let strategy = env.installed(MockStrategy.self)
-
-        let value = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
-        let status = ValueObserverProbe.watch(\AsyncBox.$theme.status, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
-
-        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
-
-        value.expect(value: "system")
-        status.expect(value: .pending)
-    }
-
     @Test("Optional seed is nil and pending; settled plus nil is loaded empty")
     func optionalSeedAndLoadedEmpty() {
         let env = SharedEnvironment()
@@ -410,20 +395,6 @@ struct AsyncStateApplyTests {
         status.expect(value: .settled)
     }
 
-    @Test("restoreSeed does not call onDrop")
-    func restoreSeedDoesNotCallOnDrop() {
-        let env = SharedEnvironment()
-        let strategy = env.installed(MockStrategy.self)
-
-        let probe = ValueObserverProbe.watch(\AsyncBox.theme, in: env)
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
-        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
-        #expect(strategy.onReadCount == 1)
-
-        strategy.env.apply("light", keyPath: \AsyncBox.$theme)
-        probe.expect(value: "light")
-        #expect(strategy.onReadCount == 1)
-    }
 }
 
 @Suite @MainActor
@@ -508,8 +479,8 @@ struct AsyncStateKeyedTests {
         value.expect(value: true)
     }
 
-    @Test("Keyed fail leaves the Value and sets error; keyed restoreSeed restores seed")
-    func keyedFailAndRestoreSeed() {
+    @Test("Keyed fail leaves the Value and sets error")
+    func keyedFailLeavesTheValue() {
         let env = SharedEnvironment()
         let strategy = env.installed(MockStrategy.self)
 
@@ -520,10 +491,6 @@ struct AsyncStateKeyedTests {
         strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$done, key: "a")
         status.expect(value: .error(.boom))
         #expect(env.read(\AsyncBox.done, key: "a") == true)
-
-        strategy.env.restoreSeed(keyPath: \AsyncBox.$done, key: "a")
-        status.expect(value: .pending)
-        #expect(env.read(\AsyncBox.done, key: "a") == nil)
     }
 
     @Test("One strategy instance serves two Addresses")
@@ -573,7 +540,7 @@ struct AsyncStateWriteTests {
         #expect(env.read(\AsyncBox.done, key: "a") == true)
     }
 
-    @Test("apply, fail, restoreSeed, and markStale do not call onWrite")
+    @Test("apply, fail, and markStale do not call onWrite")
     func inboundVerbsDoNotCallOnWrite() {
         let env = SharedEnvironment()
         let strategy = env.installed(MockStrategy.self)
@@ -581,7 +548,6 @@ struct AsyncStateWriteTests {
 
         strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
         strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
-        strategy.env.restoreSeed(keyPath: \AsyncBox.$theme)
         strategy.env.markStale(keyPath: \AsyncBox.$theme)
 
         #expect(strategy.onWriteCount == 0)
@@ -623,7 +589,6 @@ struct AsyncStateWriteTests {
 
         strategyEnv.apply("dark", keyPath: \AsyncBox.$theme)
         strategyEnv.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
-        strategyEnv.restoreSeed(keyPath: \AsyncBox.$theme)
         strategyEnv.markStale(keyPath: \AsyncBox.$theme)
     }
 }

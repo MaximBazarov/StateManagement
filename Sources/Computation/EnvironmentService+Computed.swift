@@ -49,7 +49,7 @@ extension EnvironmentService {
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         let valueID = ValueID(keyPath: keyPath)
-        let computation = env.getValue(keyPath: keyPath)
+        let computation = env.read(keyPath)
         return computation.read(env: env, valueID: valueID, receiver: notificationReceiver, key: .noKey)
     }
 
@@ -63,7 +63,7 @@ extension EnvironmentService {
         key: Key
     ) -> Output {
         let valueID = ValueID(keyPath: keyPath, key: key)
-        let computation = env.getValue(keyPath: keyPath)
+        let computation = env.read(keyPath)
         return computation.read(env: env, valueID: valueID, receiver: notificationReceiver, key: key)
     }
 

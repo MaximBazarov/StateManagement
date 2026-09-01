@@ -94,7 +94,7 @@ import Foundation
     public func read<Storage: StateContainer, Value>(
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
-        environment.getValue(keyPath: keyPath)
+        environment.read(keyPath)
     }
 
     // MARK: - Computed
@@ -105,7 +105,7 @@ import Foundation
         _ keyPath: KeyPath<Storage, Computed<NoKey, Output>>
     ) -> Output {
         environment
-            .getValue(keyPath: keyPath)
+            .read(keyPath)
             .read(
                 env: environment,
                 valueID: ValueID(keyPath: keyPath),
@@ -120,7 +120,7 @@ import Foundation
         key: Key
     ) -> Output {
         environment
-            .getValue(keyPath: keyPath)
+            .read(keyPath)
             .read(
                 env: environment,
                 valueID: ValueID(keyPath: keyPath, key: key),
@@ -136,7 +136,7 @@ import Foundation
         _ keyPath: KeyPath<Storage, [Key: Value]>,
         key: Key
     ) -> Value? {
-        environment.getValue(keyPath: keyPath, key: key)
+        environment.read(keyPath, key: key)
     }
 
     // MARK: - Service

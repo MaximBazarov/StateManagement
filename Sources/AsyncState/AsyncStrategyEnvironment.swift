@@ -89,27 +89,6 @@ public final class AsyncStrategyEnvironment {
         })
     }
 
-    /// Writes the seed and `.pending`, and clears dirty. Does not call `onDrop`.
-    public func restoreSeed<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
-    ) {
-        guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyRestoreSeed(keyPath: keyPath)
-        })
-    }
-
-    /// Writes the keyed seed and `.pending`, and clears dirty. Does not call `onDrop`.
-    public func restoreSeed<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
-        key: Key
-    ) {
-        guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyKeyedRestoreSeed(keyPath: keyPath, key: key)
-        })
-    }
-
     /// Dirties the sourced Address and notifies it. Status stays `.settled`.
     public func markStale<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
         keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>

@@ -43,8 +43,8 @@ struct SeedEnvironmentTests {
             Write(\SeedTestState.label, "hi")
         }
 
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 3)
-        #expect(env.getValue(keyPath: \SeedTestState.label) == "hi")
+        #expect(env.read(\SeedTestState.counter) == 3)
+        #expect(env.read(\SeedTestState.label) == "hi")
     }
 
     @Test("seeded keyed Write updates one dictionary entry")
@@ -54,9 +54,9 @@ struct SeedEnvironmentTests {
             Write(\SeedTestState.items, key: "b", 5)
         }
 
-        #expect(env.getValue(keyPath: \SeedTestState.items, key: "a") == 2)
-        #expect(env.getValue(keyPath: \SeedTestState.items, key: "b") == 5)
-        #expect(env.getValue(keyPath: \SeedTestState.items, key: "c") == nil)
+        #expect(env.read(\SeedTestState.items, key: "a") == 2)
+        #expect(env.read(\SeedTestState.items, key: "b") == 5)
+        #expect(env.read(\SeedTestState.items, key: "c") == nil)
     }
 
     @Test("seeded mixes Write with a named SyncOperation")
@@ -66,7 +66,7 @@ struct SeedEnvironmentTests {
             SeedBumpCounter(by: 2)
         }
 
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 12)
+        #expect(env.read(\SeedTestState.counter) == 12)
     }
 
     @Test("seed batch notifies once for multiple Writes")
@@ -88,7 +88,7 @@ struct SeedEnvironmentTests {
     @Test("empty seeded builder returns a usable fresh environment")
     func emptySeededBuilder() {
         let env = SharedEnvironment.seeded {}
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 0)
+        #expect(env.read(\SeedTestState.counter) == 0)
         #expect(env !== SharedEnvironment.shared)
     }
 
@@ -98,8 +98,8 @@ struct SeedEnvironmentTests {
         env.perform(Write(\SeedTestState.counter, 7))
         env.perform(Write(\SeedTestState.items, key: "z", 9))
 
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 7)
-        #expect(env.getValue(keyPath: \SeedTestState.items, key: "z") == 9)
+        #expect(env.read(\SeedTestState.counter) == 7)
+        #expect(env.read(\SeedTestState.items, key: "z") == 9)
     }
 
     @Test("seed applies the batch to an existing Environment")
@@ -110,8 +110,8 @@ struct SeedEnvironmentTests {
             Write(\SeedTestState.label, "hi")
         }
 
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 3)
-        #expect(env.getValue(keyPath: \SeedTestState.label) == "hi")
+        #expect(env.read(\SeedTestState.counter) == 3)
+        #expect(env.read(\SeedTestState.label) == "hi")
     }
 
     @Test("seed notifies once for multiple Writes")
@@ -132,7 +132,7 @@ struct SeedEnvironmentTests {
     func emptySeedIsNoop() {
         let env = SharedEnvironment()
         env.seed {}
-        #expect(env.getValue(keyPath: \SeedTestState.counter) == 0)
+        #expect(env.read(\SeedTestState.counter) == 0)
     }
 }
 #endif

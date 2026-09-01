@@ -209,7 +209,7 @@ import Foundation
     ) -> Value {
         // A dropped Service must not recreate a Container by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath] }
-        let value = env.getValue(keyPath: keyPath)
+        let value = env.read(keyPath)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath)
@@ -226,7 +226,7 @@ import Foundation
     ) -> Value? {
         // A dropped Service must not recreate a Container by reading.
         guard !isDropped else { return Storage()[keyPath: keyPath][key] }
-        let value = env.getValue(keyPath: keyPath, key: key)
+        let value = env.read(keyPath, key: key)
         env.observation.subscribe(
             receiver: notificationReceiver,
             valueID: ValueID(keyPath: keyPath, key: key)

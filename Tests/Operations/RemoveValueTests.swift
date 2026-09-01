@@ -64,13 +64,13 @@ struct RemoveValueTests {
     @Test func removeDeletesKeyAndLeavesOthers() {
         let env = SharedEnvironment()
 
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "A") == 1)
+        #expect(env.read(\RemoveTestState.items, key: "A") == 1)
 
         env.perform(RemoveItem(key: "A"))
 
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "A") == nil)
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "B") == 2)
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "C") == 3)
+        #expect(env.read(\RemoveTestState.items, key: "A") == nil)
+        #expect(env.read(\RemoveTestState.items, key: "B") == 2)
+        #expect(env.read(\RemoveTestState.items, key: "C") == 3)
     }
 
     @Test func removeMissingKeyIsSafeAndDoesNotTouchOthers() {
@@ -78,10 +78,10 @@ struct RemoveValueTests {
 
         env.perform(RemoveItem(key: "Z")) // never present
 
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "Z") == nil)
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "A") == 1)
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "B") == 2)
-        #expect(env.getValue(keyPath: \RemoveTestState.items, key: "C") == 3)
+        #expect(env.read(\RemoveTestState.items, key: "Z") == nil)
+        #expect(env.read(\RemoveTestState.items, key: "A") == 1)
+        #expect(env.read(\RemoveTestState.items, key: "B") == 2)
+        #expect(env.read(\RemoveTestState.items, key: "C") == 3)
     }
 
     // MARK: - Observation: removing a key notifies its dependents

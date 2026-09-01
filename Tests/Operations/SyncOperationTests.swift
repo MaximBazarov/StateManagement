@@ -46,7 +46,7 @@ struct IncrementMyStateY: SyncOperation {
 @Test @MainActor func testIncrementOperation() async throws {
     let env = SharedEnvironment()
 
-    let before = env.getValue(keyPath: \MyState.myInt)
+    let before = env.read(\MyState.myInt)
     let runCount = 1_000
 
     for _ in 1...runCount {
@@ -55,7 +55,7 @@ struct IncrementMyStateY: SyncOperation {
         // END OPERATION
     }
 
-    let after = env.getValue(keyPath: \MyState.myInt)
+    let after = env.read(\MyState.myInt)
     #expect(after == before + runCount)
 }
 
@@ -70,15 +70,15 @@ struct NestedOperation: SyncOperation {
 @Test @MainActor func testNestedOperation() async throws {
     let env = SharedEnvironment()
 
-    let beforeX = env.getValue(keyPath: \MyState.myInt)
-    let beforeY = env.getValue(keyPath: \MyState.myValue.y)
+    let beforeX = env.read(\MyState.myInt)
+    let beforeY = env.read(\MyState.myValue.y)
 
     // OPERATION
     env.perform(NestedOperation())
     // END OPERATION
 
-    let afterX = env.getValue(keyPath: \MyState.myInt)
-    let afterY = env.getValue(keyPath: \MyState.myValue.y)
+    let afterX = env.read(\MyState.myInt)
+    let afterY = env.read(\MyState.myValue.y)
 
     #expect(afterX == beforeX + 1)
     #expect(afterY == beforeY + 1)
