@@ -13,9 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #if canImport(SwiftUI)
-import Foundation
-import SwiftUI
-
 import SwiftUI
 
 private struct SharedEnvironment_SwiftUIEnvironmentKey: @MainActor EnvironmentKey {
@@ -36,17 +33,5 @@ extension View {
     public func sharedEnvironment(_ value: SharedEnvironment) -> some View {
         environment(\.sharedEnvironment, value)
     }
-
-    #if DEBUG
-    /// Creates a fresh ``SharedEnvironment``, seeds it with the builder’s operations, and
-    /// injects it for this view subtree.
-    ///
-    /// DEBUG only. Prefer named operations in production code.
-    public func seedEnvironment(
-        @SeedOperationsBuilder _ operations: () -> [any SyncOperation]
-    ) -> some View {
-        sharedEnvironment(.seeded(operations))
-    }
-    #endif
 }
 #endif
