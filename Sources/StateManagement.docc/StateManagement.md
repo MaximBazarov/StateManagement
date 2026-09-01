@@ -57,14 +57,14 @@ Design Containers and Values. Read them. Change them only through an Operation. 
 
 ### AsyncStrategy
 
-An AsyncStrategy owns read, write, and external side effects for `@AsyncState`. Strategy kicks and inbound verbs take the `$` Address. Watch and Operations keep the Value Address. Policy on ``AsyncState`` is how that Address is backed; it is not a second Address.
+An AsyncStrategy owns read, write, and external side effects for `@AsyncState`. Strategy kicks, inbound verbs, and `preheat` take the `$` Address. Watch and Operations keep the Value Address. A dictionary Value is the Keyed case, one Address per entry. Policy on ``AsyncState`` is how that Address is backed; it is not a second Address.
 
 - ``AsyncState``
 - ``AsyncStrategy``
-- ``SourceStatus``
+- ``AsyncStateStatus``
 - ``AsyncStrategyEnvironment``
 - ``SharedEnvironment/preheat(_:)``
-- ``SharedEnvironment/preheat(_:key:)``
+- ``SharedEnvironment/preheat(_:keys:)``
 
 ### Combine
 

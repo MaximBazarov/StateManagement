@@ -24,6 +24,11 @@ private let strategyLogger = Logger(
 ///
 /// Inbound verbs are hidden Sync operations. No `write`. No `read`. No `spawnService`.
 /// Nested ``perform`` has no `write`. Dead Environment: inbound verbs no-op.
+///
+/// > Important: A strategy retains this, never the ``SharedEnvironment``. The Environment owns the
+/// strategy, so holding it back is a cycle; this type holds the Environment weakly and answers
+/// ``environmentID`` after it dies, which is what an overlay keyed by Environment identity needs.
+/// It is what every verb a strategy may call is reached through, so there is nothing else to keep.
 @MainActor
 public final class AsyncStrategyEnvironment {
     weak var environment: SharedEnvironment?
@@ -43,70 +48,70 @@ public final class AsyncStrategyEnvironment {
         return environment
     }
 
-    /// Writes the Value and `.settled`, and clears dirty.
-    public func apply<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
-        _ value: Value,
-        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
+    /// Writes the Value and `.settled`, clears Stale, and resumes every waiter on this Address.
+    public func apply<Storage: StateContainer, S: AsyncStrategy, Value>(
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>,
+        value: Value
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyApply(value, keyPath: keyPath)
+        environment.perform(StrategyWrite { runtime in
+            runtime.apply(value, at: address)
         })
     }
 
-    /// Writes the keyed Value and `.settled`, and clears dirty. `nil` settles a missing key.
-    public func apply<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        _ value: Value?,
-        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
-        key: Key
+    /// Writes the keyed Value and `.settled`, and clears Stale. `nil` settles a missing key.
+    public func apply<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
+        key: Key,
+        value: Entry?
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyKeyedApply(value, keyPath: keyPath, key: key)
+        environment.perform(StrategyWrite { runtime in
+            runtime.apply(value, at: address, key: key)
         })
     }
 
-    /// Writes `.error`, leaves the sourced Value, and clears dirty.
-    public func fail<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
-        _ error: S.Failure,
-        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
+    /// Writes `.error`, leaves the sourced Value, clears Stale, and throws to the waiters.
+    public func fail<Storage: StateContainer, S: AsyncStrategy, Value>(
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>,
+        error: S.Failure
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyFail(error, keyPath: keyPath)
+        environment.perform(StrategyWrite { runtime in
+            runtime.fail(error, at: address)
         })
     }
 
-    /// Writes keyed `.error`, leaves the sourced Value, and clears dirty.
-    public func fail<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        _ error: S.Failure,
-        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
-        key: Key
+    /// Writes keyed `.error`, leaves the sourced Value, and clears Stale.
+    public func fail<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
+        key: Key,
+        error: S.Failure
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyKeyedFail(error, keyPath: keyPath, key: key)
+        environment.perform(StrategyWrite { runtime in
+            runtime.fail(error, at: address, key: key)
         })
     }
 
     /// Dirties the sourced Address and notifies it. Status stays `.settled`.
-    public func markStale<Storage: StateContainer, S: AsyncStrategy, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, Value, Status>>
+    public func markStale<Storage: StateContainer, S: AsyncStrategy, Value>(
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyMarkStale(keyPath: keyPath)
+        environment.perform(StrategyWrite { runtime in
+            runtime.markStale(at: address, keys: [nil])
         })
     }
 
-    /// Dirties the keyed sourced Address and notifies it. Status stays `.settled`.
-    public func markStale<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Value, Status>(
-        keyPath: KeyPath<Storage, AsyncState<S, [Key: Value], Status>>,
-        key: Key
+    /// Dirties these entries and notifies them, in one Operation and one observation round.
+    public func markStale<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
+        keys: Set<Key>
     ) {
         guard let environment = liveEnvironment() else { return }
-        environment.perform(StrategyWrite { env in
-            env.applyStrategyKeyedMarkStale(keyPath: keyPath, key: key)
+        environment.perform(StrategyWrite { runtime in
+            runtime.markStale(at: address, keys: keys.map { AnyHashable($0) })
         })
     }
 

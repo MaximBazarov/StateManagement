@@ -31,8 +31,8 @@ Everything one Environment owns.
 _Avoid_: using this word for a single field or for a Container
 
 **Seed**:
-Starting Values placed into an Environment for a preview or a test. Not a production change.
-_Avoid_: fixture, stub state, setup (when you mean this), Write (as a second noun)
+The Values an Environment starts with: the default a declaration carries, and the Values placed up front for a preview or a test. Not a production change.
+_Avoid_: fixture, setup (when you mean this), Write (as a second noun)
 
 ### Values
 
@@ -53,7 +53,7 @@ A Value that is the whole fact at one name in a Container.
 _Avoid_: dictionary state
 
 **Keyed value**:
-A Value that is one entry in a dictionary inside a Container.
+A Value that is one entry in a dictionary inside a Container. The dictionary holding it is itself an Atomic value at its own Address.
 _Avoid_: collection observation, item state, dictionary state
 
 **Computed**:
@@ -70,9 +70,9 @@ _Avoid_: Source, ExternalSource, Bridge, inbound Service, using Service for this
 The way an Address is backed: a type declared on the AsyncStrategy that selects that strategy, and a per-Address value stored on `@AsyncState` and passed to `onRead`, `onWrite`, and `onDrop`.
 _Avoid_: Bind, Binding, Parameters (when you mean this), using Policy as a second Address, Source update (when you mean this)
 
-**Source status**:
+**Async state status**:
 Whether an Address backed by an AsyncStrategy holds an accepted Value. `$property.status`: pending (seed only), settled (applied or written), error (last `fail`). Not an Operation.
-_Avoid_: wrapping the sourced Value in a status enum, fetchStatus, revalidation flag, AsyncStatus, `.value` (when you mean settled), treating `$property` as a Value, persist-out or Execution as this status
+_Avoid_: Source status, AsyncStatus, wrapping the sourced Value in a status enum, fetchStatus, revalidation flag, `.value` (when you mean settled), treating `$property` as a Value, persist-out or Execution as this status
 
 **Stale**:
 A dirty mark on an Address backed by an AsyncStrategy. No Value write. The next read calls `onRead`.
@@ -117,11 +117,15 @@ _Avoid_: treating this as the Task stopping
 
 **Reset**:
 A Sync Operation verb that drops Containers from a long-lived Environment. `reset()` drops every Container, Service, and AsyncStrategy. `reset(_:)` drops one Container type.
-_Avoid_: restoreSeed, unbind, teardown, using this for per-key remove
+_Avoid_: unbind, teardown, using this for per-key Remove
+
+**Remove**:
+A Sync Operation verb that drops one entry of a Keyed value. On an Address backed by an AsyncStrategy it evicts: the entry goes, the status returns to pending, and nothing reaches the strategy, so the next read loads that entry again. Deleting outside is a Write of `nil`, or an Operation the Satellite ships.
+_Avoid_: delete, Reset (when you mean this), and treating this as a change the strategy is told about
 
 **Refresh**:
-A Sync Operation verb that marks an Address backed by an AsyncStrategy Stale and calls `onRead` again. Source status does not change until the strategy applies or fails. Called as `refresh()` on `@AsyncState` or on a `Watch` projection.
-_Avoid_: reload, invalidate, markStale (as the app-facing verb), restoreSeed, reset, treating this as awaiting the reload (that is `read` of the `$` Address)
+A Sync Operation verb that marks an Address backed by an AsyncStrategy Stale and calls `onRead` again. Async state status does not change until the strategy applies or fails. Called as `refresh()` on `@AsyncState` or on a `Watch` projection.
+_Avoid_: reload, invalidate, markStale (as the app-facing verb), reset, treating this as awaiting the reload (that is `read` of the `$` Address)
 
 ### Read
 

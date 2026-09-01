@@ -120,6 +120,33 @@ extension SubscribingValueReader {
         makeObservingValue(statePath, areEqual: nil)
     }
 
+    /// A whole dictionary state. That Address names a whole fact and never kicks a strategy;
+    /// watching one entry of the same declaration does (ADR 0026). Equatable entries diff.
+    static func observingDictionary<Key: Hashable, Entry: Equatable>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>
+    ) -> SubscribingValueReader where Value == [Key: Entry] {
+        makeObservingDictionary(statePath, areEqual: { $0 == $1 })
+    }
+
+    /// A whole dictionary state with non-Equatable entries: always notify.
+    static func observingDictionary<Key: Hashable, Entry>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>
+    ) -> SubscribingValueReader where Value == [Key: Entry] {
+        makeObservingDictionary(statePath, areEqual: nil)
+    }
+
+    private static func makeObservingDictionary<Key: Hashable, Entry>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>,
+        areEqual: ((Value, Value) -> Bool)?
+    ) -> SubscribingValueReader where Value == [Key: Entry] {
+        let valueID = ValueID(keyPath: statePath)
+        return SubscribingValueReader(valueID: valueID, areEqual: areEqual) { env, receiver in
+            let value = env.read(statePath)
+            env.observation.subscribe(receiver: receiver, valueID: valueID)
+            return value
+        }
+    }
+
 
     /// A single key inside a dictionary state. Equatable output diffs.
     static func buildKeyedValueReader<Key: Hashable, Output: Equatable>(

@@ -82,13 +82,13 @@ final class FailingStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value, Status>(
-        _ keyPath: KeyPath<Storage, AsyncState<FailingStrategy, Value, Status>>,
+    func onRead<Storage: StateContainer, Value>(
+        _ address: KeyPath<Storage, AsyncState<FailingStrategy, NoKey, Value, Value>>,
         policy _: Void,
         current _: Value
     ) {
         onReadCount += 1
-        env.fail(MockFailure.boom, keyPath: keyPath)
+        env.fail(address, error: MockFailure.boom)
     }
 }
 
@@ -120,8 +120,8 @@ final class LoadingStrategy: AsyncStrategy {
         self.env = env
     }
 
-    func onRead<Storage: StateContainer, Value, Status>(
-        _ keyPath: KeyPath<Storage, AsyncState<LoadingStrategy, Value, Status>>,
+    func onRead<Storage: StateContainer, Value>(
+        _ address: KeyPath<Storage, AsyncState<LoadingStrategy, NoKey, Value, Value>>,
         policy _: Void,
         current _: Value
     ) {
@@ -192,11 +192,11 @@ struct AwaitableSourcedReadTests {
         #expect(await waitUntil { strategy.onReadCount == 1 })
         #expect(result.finished == false)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         try await task.value
 
         #expect(result.value == "dark")
-        #expect(env.read(\AsyncBox.$theme.status) == SourceStatus<MockFailure>.settled)
+        #expect(env.read(\AsyncBox.$theme.status) == AsyncStateStatus<MockFailure>.settled)
     }
 
     @Test("Settled $ read returns without calling onRead again")
@@ -204,7 +204,7 @@ struct AwaitableSourcedReadTests {
         let env = SharedEnvironment()
         let strategy = env.strategyUnderTest(MockStrategy.self)
         _ = env.read(\AsyncBox.theme)
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
 
         let result = ReadResult<String>()
         try await env.perform(ReadTheme(result: result))
@@ -218,7 +218,7 @@ struct AwaitableSourcedReadTests {
         let env = SharedEnvironment()
         let strategy = env.strategyUnderTest(MockStrategy.self)
         _ = env.read(\AsyncBox.theme)
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         env.read(\AsyncBox.$theme).refresh()
 
         let result = ReadResult<String>()
@@ -227,7 +227,7 @@ struct AwaitableSourcedReadTests {
         #expect(await waitUntil { strategy.onReadCount == 3 })
         #expect(result.finished == false)
 
-        strategy.env.apply("light", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "light")
         try await task.value
 
         #expect(result.value == "light")
@@ -256,7 +256,7 @@ struct AwaitableSourcedReadTests {
         let task = Task { @MainActor in try await env.perform(ReadTheme(result: result)) }
         #expect(await waitUntil { strategy.onReadCount == 1 })
 
-        strategy.env.fail(MockFailure.boom, keyPath: \AsyncBox.$theme)
+        strategy.env.fail(\AsyncBox.$theme, error: MockFailure.boom)
 
         await #expect(throws: MockFailure.boom) { try await task.value }
         #expect(result.finished == false)
@@ -274,7 +274,7 @@ struct AwaitableSourcedReadTests {
         let taskB = Task { @MainActor in try await env.perform(ReadTheme(result: second)) }
         #expect(await waitUntil { second.started })
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         try await taskA.value
         try await taskB.value
 
@@ -296,7 +296,7 @@ struct AwaitableSourcedReadTests {
         #expect(result.finished == false)
         #expect(strategy.onReadCount == 1)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         try await task.value
         #expect(result.value == "dark")
     }
@@ -312,11 +312,11 @@ struct AwaitableSourcedReadTests {
         let task = Task { @MainActor in try await env.perform(ReadTheme(result: result)) }
         #expect(await waitUntil { result.started })
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         try await task.value
 
         value.expect(value: "dark")
-        status.expect(value: SourceStatus<MockFailure>.settled)
+        status.expect(value: AsyncStateStatus<MockFailure>.settled)
     }
 
     @Test("An Operation $ read leaves no receiver behind")
@@ -327,7 +327,7 @@ struct AwaitableSourcedReadTests {
 
         let task = Task { @MainActor in try await env.perform(ReadTheme(result: result)) }
         #expect(await waitUntil { strategy.onReadCount == 1 })
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
         try await task.value
 
         let subscribed = env.observation.subscribedValueIDs
@@ -346,7 +346,7 @@ struct AwaitableSourcedReadTests {
         #expect(service.serveCount == 1)
         #expect(service.seen.isEmpty)
 
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
 
         #expect(await waitUntil { service.serveCount == 2 })
         #expect(await waitUntil { service.seen == ["dark", "dark"] })
@@ -388,7 +388,7 @@ struct AwaitableSourcedReadTests {
         // wrapper. The awaitable read lives on `AsyncOperationEnvironment` and `EnvironmentService`.
         let wrapper = env.read(\AsyncBox.$theme)
 
-        #expect(wrapper.status == SourceStatus<MockFailure>.pending)
+        #expect(wrapper.status == AsyncStateStatus<MockFailure>.pending)
     }
 }
 
@@ -406,7 +406,7 @@ struct KeyedSourcedAwaitTests {
         let task = Task { @MainActor in try await env.perform(ReadDone(key: "a", result: result)) }
         #expect(await waitUntil { strategy.keyedOnReadCount == 1 })
 
-        strategy.env.apply(true, keyPath: \AsyncBox.$done, key: "a")
+        strategy.env.apply(\AsyncBox.$done, key: "a", value: true)
         try await task.value
 
         #expect(result.value == true)
@@ -421,37 +421,28 @@ struct KeyedSourcedAwaitTests {
         let task = Task { @MainActor in try await env.perform(ReadDone(key: "a", result: result)) }
         #expect(await waitUntil { strategy.keyedOnReadCount == 1 })
 
-        strategy.env.apply(true, keyPath: \AsyncBox.$done, key: "b")
+        strategy.env.apply(\AsyncBox.$done, key: "b", value: true)
         // Bounded poll: the waiter must still be suspended, so this must time out.
         #expect(await waitUntil(timeout: .milliseconds(100)) { result.finished } == false)
 
-        strategy.env.apply(false, keyPath: \AsyncBox.$done, key: "a")
+        strategy.env.apply(\AsyncBox.$done, key: "a", value: false)
         try await task.value
 
         #expect(result.value == false)
     }
 
-    @Test("refresh(key:) kicks onRead for that key only")
-    func keyedRefreshKicksItsKey() {
+    /// A keyless keyed `refresh()` does not compile, so the no-key case has no test.
+    @Test("refresh(keys:) kicks onRead for those keys only")
+    func keyedRefreshKicksItsKeys() {
         let env = SharedEnvironment()
         let strategy = env.strategyUnderTest(MockStrategy.self)
         _ = env.read(\AsyncBox.done, key: "a")
-        #expect(strategy.keyedOnReadCount == 1)
-
-        env.read(\AsyncBox.$done).refresh(key: "a")
-
+        _ = env.read(\AsyncBox.done, key: "b")
         #expect(strategy.keyedOnReadCount == 2)
-    }
 
-    @Test("refresh() with no key on a keyed Address is a no-op")
-    func keyedRefreshWithoutKeyIsANoOp() {
-        let env = SharedEnvironment()
-        let strategy = env.strategyUnderTest(MockStrategy.self)
-        _ = env.read(\AsyncBox.done, key: "a")
+        env.read(\AsyncBox.$done).refresh(keys: ["a"])
 
-        env.read(\AsyncBox.$done).refresh()
-
-        #expect(strategy.keyedOnReadCount == 1)
+        #expect(strategy.keyedOnReadCount == 3)
     }
 }
 
@@ -465,12 +456,12 @@ struct SourcedRefreshTests {
         let env = SharedEnvironment()
         let strategy = env.strategyUnderTest(MockStrategy.self)
         _ = env.read(\AsyncBox.theme)
-        strategy.env.apply("dark", keyPath: \AsyncBox.$theme)
+        strategy.env.apply(\AsyncBox.$theme, value: "dark")
 
         env.read(\AsyncBox.$theme).refresh()
 
         #expect(strategy.onReadCount == 2)
-        #expect(env.read(\AsyncBox.$theme.status) == SourceStatus<MockFailure>.settled)
+        #expect(env.read(\AsyncBox.$theme.status) == AsyncStateStatus<MockFailure>.settled)
         #expect(env.read(\AsyncBox.theme) == "dark")
     }
 

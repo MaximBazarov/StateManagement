@@ -151,6 +151,32 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
         )
     }
 
+    // Whole Dictionary State (Equatable entries: diffs)
+    public init<Key: Hashable, Entry: Equatable>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>,
+        file: String = #fileID,
+        line: UInt = #line
+    ) where Value == [Key: Entry] {
+        self.file = file
+        self.line = line
+        self._reader = StateObject(
+            wrappedValue: Self.watching(reader: .observingDictionary(statePath))
+        )
+    }
+
+    // Whole Dictionary State (non-Equatable entries: always notify)
+    public init<Key: Hashable, Entry>(
+        _ statePath: KeyPath<Storage, [Key: Entry]>,
+        file: String = #fileID,
+        line: UInt = #line
+    ) where Value == [Key: Entry] {
+        self.file = file
+        self.line = line
+        self._reader = StateObject(
+            wrappedValue: Self.watching(reader: .observingDictionary(statePath))
+        )
+    }
+
     // Keyed Dictionary State (Equatable output: diffs)
     public init<Key: Hashable, Output: Equatable>(
         _ statePath: KeyPath<Storage, [Key: Output]>,

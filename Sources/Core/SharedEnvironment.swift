@@ -43,10 +43,9 @@ import Foundation
     /// Every in-flight Execution, including `runAll`. Reset Cancels this set.
     private var liveExecutions: [UUID: Execution] = [:]
 
-    var strategyWarehouse: [ObjectIdentifier: any AsyncStrategy] = [:]
-    var strategyRecords: [ValueID: StrategyRecord] = [:]
-    var pendingHandle: (any AsyncStateHandle)?
-    var standingStrategyEnvironment: AsyncStrategyEnvironment?
+    /// The AsyncState seam. Core carries this one property and forwards into it, so the strategy
+    /// warehouse, the record table, and the pending handle never become public API.
+    private(set) lazy var asyncState = AsyncStateRuntime(self)
 
     /// Nested sync `perform` joins this Environment. `notifyAll` waits until this original unwinds.
     private var originalSyncEnvironment: SyncOperationEnvironment?
@@ -123,20 +122,20 @@ import Foundation
         _ keyPath: KeyPath<Storage, Value>
     ) -> Value {
         withWarehouseAccess {
-            let storage = getStorage(Storage.self)
-            return accessSourced(storage, keyPath: keyPath, key: nil)
+            asyncState.accessSourced(getStorage(Storage.self), keyPath: keyPath)
         }
     }
 
-    /// Activates a sourced Address through its `$` Address, with the key when Keyed.
-    /// Same first-read / dirty-read `onRead` rules as ``read(_:)``.
-    func getSourcedWrapper<Storage: StateContainer, Wrapper>(
-        keyPath: KeyPath<Storage, Wrapper>,
-        key: AnyHashable?
-    ) -> Wrapper {
+    /// Snapshots the whole dictionary at `keyPath`. The dictionary Address names a whole fact and
+    /// is never a seam Address, so this binds the wrapper and kicks nothing (ADR 0026).
+    ///
+    /// The pair repeats at every read entry point because a caller generic over `Value` always
+    /// static-dispatches to the unconstrained overload above.
+    func read<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>
+    ) -> [Key: Value] {
         withWarehouseAccess {
-            let storage = getStorage(Storage.self)
-            return accessSourced(storage, keyPath: keyPath, key: key)
+            asyncState.accessSourced(getStorage(Storage.self), keyPath: keyPath)
         }
     }
 
@@ -147,12 +146,12 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            pendingHandle = nil
-            capturingHandle {
+            asyncState.pendingHandle = nil
+            asyncState.capturingHandle {
                 storage[keyPath: keyPath] = newValue
             }
-            if let handle = pendingHandle {
-                finishAppWrite(handle, value: newValue, keyPath: keyPath)
+            if let handle = asyncState.pendingHandle {
+                asyncState.finishAppWrite(handle, keyPath: keyPath, key: nil)
             }
             let valueID = ValueID(
                 keyPath: keyPath
@@ -181,9 +180,7 @@ import Foundation
         key: Key
     ) -> Value? {
         withWarehouseAccess {
-            let storage = getStorage(Storage.self)
-            _ = accessSourced(storage, keyPath: keyPath, key: AnyHashable(key))
-            return storage[keyPath: keyPath][key]
+            asyncState.accessSourcedEntry(getStorage(Storage.self), keyPath: keyPath, key: key)[key]
         }
     }
 
@@ -195,12 +192,12 @@ import Foundation
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            pendingHandle = nil
-            capturingHandle {
+            asyncState.pendingHandle = nil
+            asyncState.capturingHandle {
                 storage[keyPath: keyPath][key] = newValue
             }
-            if let handle = pendingHandle {
-                finishAppWrite(handle, value: newValue, keyPath: keyPath, key: key)
+            if let handle = asyncState.pendingHandle {
+                asyncState.finishAppWrite(handle, keyPath: keyPath, key: AnyHashable(key))
             }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)
@@ -225,13 +222,24 @@ import Foundation
     /// Unlike rewriting the whole dictionary at its base key path, this invalidates the *keyed*
     /// ``ValueID`` so receivers watching that specific key are notified (and flushed), and any
     /// computation depending on the key is re-evaluated.
+    ///
+    /// On a sourced Address this evicts rather than deletes. The entry leaves the Environment and
+    /// its status goes back to `.pending`, but the strategy is not told and no store is written, so
+    /// the next read of that key is a first read and loads it again (ADR 0026). To delete outside,
+    /// write the Address to a Value the strategy's `onWrite` recognises as a deletion.
     func remove<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: WritableKeyPath<Storage, [Key: Value]>,
         key: Key
     ) {
         withWarehouseAccess {
             var storage = getStorage(Storage.self)
-            storage[keyPath: keyPath][key] = nil
+            asyncState.pendingHandle = nil
+            asyncState.capturingHandle {
+                storage[keyPath: keyPath][key] = nil
+            }
+            if let handle = asyncState.pendingHandle {
+                asyncState.evict(handle, keyPath: keyPath, key: AnyHashable(key))
+            }
             let valueID = ValueID(keyPath: keyPath, key: AnyHashable(key))
             let dictionaryID = ValueID(keyPath: keyPath)
             #if STATE_MANAGEMENT_TELEMETRY_INTERNAL
@@ -621,15 +629,14 @@ import Foundation
     func resetAll() {
         cancelAllExecutions()
         dropAllServices()
-        dropAllRecords()
-        strategyWarehouse.removeAll()
+        asyncState.resetAll()
         observation.invalidateSubscribed()
         warehouse.removeAll()
     }
 
     func resetContainer<Storage: StateContainer>(_ type: Storage.Type) {
         cancelAllExecutions()
-        dropRecords(in: type)
+        asyncState.dropRecords(in: type)
         observation.invalidateSubscribed(in: type)
         warehouse.removeValue(forKey: StorageID(type))
     }

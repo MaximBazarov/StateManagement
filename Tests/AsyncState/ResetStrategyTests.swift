@@ -27,8 +27,8 @@ final class ResetStrategy: AsyncStrategy {
 
     init(env _: AsyncStrategyEnvironment) {}
 
-    func onDrop<Storage: StateContainer, Value, Status>(
-        _ keyPath: KeyPath<Storage, AsyncState<ResetStrategy, Value, Status>>,
+    func onDrop<Storage: StateContainer, Value>(
+        _ address: KeyPath<Storage, AsyncState<ResetStrategy, NoKey, Value, Value>>,
         policy _: Void
     ) {
         onDropCount += 1
@@ -49,7 +49,7 @@ struct ResetStrategyTests {
         let env = SharedEnvironment()
         let strategy = ResetStrategy(env: env.strategyEnvironment())
         env.install(strategy)
-        env.preheat(\ResetSourcedBox.theme)
+        env.preheat(\ResetSourcedBox.$theme)
         #expect(strategy.onDropCount == 0)
 
         env.perform(ResetSourced())
@@ -63,7 +63,7 @@ struct ResetStrategyTests {
         let env = SharedEnvironment()
         let strategy = ResetStrategy(env: env.strategyEnvironment())
         env.install(strategy)
-        env.preheat(\ResetSourcedBox.theme)
+        env.preheat(\ResetSourcedBox.$theme)
 
         env.perform(ResetAll())
 

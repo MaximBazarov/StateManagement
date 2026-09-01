@@ -25,16 +25,16 @@ extension AsyncOperationEnvironment {
     /// `apply` or `fail` leaves this call suspended; `reset` and Cancel release it with the
     /// current Value.
     public func read<Storage: StateContainer, S: AsyncStrategy, Value>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, Value, SourceStatus<S.Failure>>>
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>
     ) async throws(S.Failure) -> Value {
-        try await environment.awaitSourced(keyPath, subscribe: nil)
+        try await environment.awaitSourced(address, subscribe: nil)
     }
 
-    /// Awaits one key of a keyed sourced Address. Another key's `apply` does not resume this wait.
-    public func read<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Output>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, [Key: Output], [Key: SourceStatus<S.Failure>]>>,
+    /// Awaits one entry of a keyed sourced Address. Another key's `apply` does not resume this wait.
+    public func read<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
         key: Key
-    ) async throws(S.Failure) -> Output? {
-        try await environment.awaitSourced(keyPath, key: key, subscribe: nil)
+    ) async throws(S.Failure) -> Entry? {
+        try await environment.awaitSourced(address, key: key, subscribe: nil)
     }
 }

@@ -17,7 +17,7 @@ import OSLog
 
 private let sourcedLogger = Logger(
     subsystem: "StateManagement",
-    category: "AsyncStrategy"
+    category: "AsyncState"
 )
 
 /// Why a waiter on a sourced Address woke up.
@@ -30,24 +30,22 @@ enum SourcedResume {
 
 extension SharedEnvironment {
 
-    // MARK: - Awaitable read of the `$` Address
-
     /// Awaits the sourced Value at a `$` Address. `.settled` returns, `.error` throws,
-    /// `.pending` or dirty waits for `apply` / `fail`.
+    /// `.pending` or Stale waits for `apply` / `fail`.
     ///
     /// `subscribe` receives the notified ``ValueID`` before the wait, so a Service can stay
     /// subscribed while it awaits. An Operation passes `nil` and leaves no receiver behind.
     func awaitSourced<Storage: StateContainer, S: AsyncStrategy, Value>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, Value, SourceStatus<S.Failure>>>,
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>,
         subscribe: ((ValueID) -> Void)?
     ) async throws(S.Failure) -> Value {
-        let wrapper = getSourcedWrapper(keyPath: keyPath, key: nil)
-        let record = strategyRecords[ValueID(keyPath: keyPath)]
-        subscribe?(record?.sourcedID ?? ValueID(keyPath: keyPath))
+        let wrapper = asyncState.sourcedWrapper(keyPath: address, key: nil)
+        let record = asyncState.record(at: ValueID(keyPath: address))
+        subscribe?(record?.sourcedID ?? ValueID(keyPath: address))
 
         while true {
             let dirty = record?.dirty ?? false
-            switch wrapper.statusStorage {
+            switch wrapper.statusStorage[.noKey] ?? .pending {
             case .settled where !dirty:
                 return wrapper.storage
             case .error(let failure) where !dirty:
@@ -66,17 +64,17 @@ extension SharedEnvironment {
         }
     }
 
-    /// Awaits one key of a keyed sourced Address. A waiter on one key is not resumed by
+    /// Awaits one entry of a keyed sourced Address. A waiter on one key is not resumed by
     /// another key's `apply`.
-    func awaitSourced<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Output>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, [Key: Output], [Key: SourceStatus<S.Failure>]>>,
+    func awaitSourced<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
         key: Key,
         subscribe: ((ValueID) -> Void)?
-    ) async throws(S.Failure) -> Output? {
+    ) async throws(S.Failure) -> Entry? {
         let anyKey = AnyHashable(key)
-        let wrapper = getSourcedWrapper(keyPath: keyPath, key: anyKey)
-        let record = strategyRecords[ValueID(keyPath: keyPath, key: anyKey)]
-        subscribe?(record?.sourcedID ?? ValueID(keyPath: keyPath, key: anyKey))
+        let wrapper = asyncState.sourcedWrapper(keyPath: address, key: anyKey)
+        let record = asyncState.record(at: ValueID(keyPath: address, key: anyKey))
+        subscribe?(record?.sourcedID ?? ValueID(keyPath: address, key: anyKey))
 
         while true {
             let dirty = record?.dirty ?? false
@@ -113,46 +111,5 @@ extension SharedEnvironment {
                 record.resumeWaiter(token, with: .released)
             }
         }
-    }
-
-    // MARK: - Refresh
-
-    /// `AsyncState.refresh()`: dirty plus kick `onRead`. Status is unchanged until `apply` / `fail`.
-    func refreshHandle(_ handle: any AsyncStateHandle, key: AnyHashable?) {
-        if handle.isKeyed, key == nil {
-            sourcedLogger.debug("refresh() on a keyed Address needs a key: no-op")
-            return
-        }
-        guard let record = boundRecord(for: handle, key: key) else {
-            sourcedLogger.debug("refresh() before the Address was read: no-op")
-            return
-        }
-        kickRefresh(record)
-    }
-
-    /// `Watch.$property.refresh()`: same Operation, addressed by the ValueID the Watch reads.
-    func refreshAddress(valueID: ValueID) {
-        guard let record = strategyRecords[valueID] else {
-            sourcedLogger.debug("refresh() of an Address with no AsyncStrategy: no-op")
-            return
-        }
-        kickRefresh(record)
-    }
-
-    private func boundRecord(
-        for handle: any AsyncStateHandle,
-        key: AnyHashable?
-    ) -> StrategyRecord? {
-        strategyRecords.values.first { record in
-            ObjectIdentifier(record.handle) == ObjectIdentifier(handle) && record.key == key
-        }
-    }
-
-    /// One Sync Operation: dirty, then kick. No Value and no status change, so nothing to notify.
-    private func kickRefresh(_ record: StrategyRecord) {
-        perform(StrategyWrite { env in
-            record.dirty = true
-            env.callOnRead(record)
-        })
     }
 }

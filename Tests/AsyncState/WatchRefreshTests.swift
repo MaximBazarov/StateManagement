@@ -81,7 +81,7 @@ struct WatchRefreshTests {
         hooks.sourced?()
 
         #expect(strategy.onReadCount == atomicReads + 1)
-        #expect(env.read(\AsyncBox.$theme.status) == SourceStatus<MockFailure>.pending)
+        #expect(env.read(\AsyncBox.$theme.status) == AsyncStateStatus<MockFailure>.pending)
     }
 
     @Test("A keyed Watch $refresh() refreshes its own key")

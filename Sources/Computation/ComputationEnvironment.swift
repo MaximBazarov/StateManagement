@@ -62,6 +62,18 @@ import Foundation
         return value
     }
 
+    /// Reads a whole **dictionary state** value. That Address names a whole fact and never kicks a
+    /// strategy; reading one entry of the same declaration does (ADR 0026).
+    public func read<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>
+    ) -> [Key: Value] {
+        let targetValueID = ValueID(keyPath: keyPath)
+        let value = env.read(keyPath)
+        env.observation.register(dependent: dependent, on: targetValueID)
+        subscribe(to: targetValueID)
+        return value
+    }
+
     /// Reads a **keyed state** value, then registers as a dependant and subscribes.
     public func read<Storage: StateContainer, Key: Hashable, Value>(
         _ keyPath: KeyPath<Storage, [Key: Value]>,

@@ -25,23 +25,23 @@ extension EnvironmentService {
     /// schedules the next ``EnvironmentService/serve()``. A strategy whose `onRead` returns without
     /// `apply` or `fail` leaves this call suspended; `reset` releases it with the current Value.
     public func read<Storage: StateContainer, S: AsyncStrategy, Value>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, Value, SourceStatus<S.Failure>>>
+        _ address: KeyPath<Storage, AsyncState<S, NoKey, Value, Value>>
     ) async throws(S.Failure) -> Value {
         // A dropped Service must not recreate a Container by reading, and must not wait.
-        guard !isDropped else { return Storage()[keyPath: keyPath].storage }
-        return try await env.awaitSourced(keyPath) { [weak self] valueID in
+        guard !isDropped else { return Storage()[keyPath: address].storage }
+        return try await env.awaitSourced(address) { [weak self] valueID in
             guard let self else { return }
             self.env.observation.subscribe(receiver: self.notificationReceiver, valueID: valueID)
         }
     }
 
-    /// Awaits one key of a keyed sourced Address, subscribing to that key.
-    public func read<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Output>(
-        _ keyPath: KeyPath<Storage, AsyncState<S, [Key: Output], [Key: SourceStatus<S.Failure>]>>,
+    /// Awaits one entry of a keyed sourced Address, subscribing to that key.
+    public func read<Storage: StateContainer, S: AsyncStrategy, Key: Hashable, Entry>(
+        _ address: KeyPath<Storage, AsyncState<S, Key, Entry, [Key: Entry]>>,
         key: Key
-    ) async throws(S.Failure) -> Output? {
-        guard !isDropped else { return Storage()[keyPath: keyPath].storage[key] }
-        return try await env.awaitSourced(keyPath, key: key) { [weak self] valueID in
+    ) async throws(S.Failure) -> Entry? {
+        guard !isDropped else { return Storage()[keyPath: address].storage[key] }
+        return try await env.awaitSourced(address, key: key) { [weak self] valueID in
             guard let self else { return }
             self.env.observation.subscribe(receiver: self.notificationReceiver, valueID: valueID)
         }

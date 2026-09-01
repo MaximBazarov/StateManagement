@@ -217,6 +217,21 @@ import Foundation
         return value
     }
 
+    /// Reads the whole dictionary and subscribes to it. That Address names a whole fact and never
+    /// kicks a strategy; reading one entry of the same declaration does (ADR 0026).
+    public func read<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>
+    ) -> [Key: Value] {
+        // A dropped Service must not recreate a Container by reading.
+        guard !isDropped else { return Storage()[keyPath: keyPath] }
+        let value = env.read(keyPath)
+        env.observation.subscribe(
+            receiver: notificationReceiver,
+            valueID: ValueID(keyPath: keyPath)
+        )
+        return value
+    }
+
     /// Reads a Keyed value and subscribes to that key.
     ///   - keyPath: path to the value e.g. `\MyState.myValue`.
     ///   - key: dictionary key of the value.

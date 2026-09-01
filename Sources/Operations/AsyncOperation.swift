@@ -97,6 +97,14 @@ import Foundation
         environment.read(keyPath)
     }
 
+    /// Reads the whole dictionary. That Address names a whole fact and never kicks a strategy;
+    /// reading one entry of the same declaration does (ADR 0026).
+    public func read<Storage: StateContainer, Key: Hashable, Value>(
+        _ keyPath: KeyPath<Storage, [Key: Value]>
+    ) -> [Key: Value] {
+        environment.read(keyPath)
+    }
+
     // MARK: - Computed
 
     /// Reads an atomic ``Computed``. The Operation does not subscribe: it reads and lets go.

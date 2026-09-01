@@ -15,10 +15,13 @@
 import Foundation
 
 /// Hidden Sync operation for AsyncStrategy inbound verbs. Apps do not perform it.
+///
+/// One called on the caller's stack joins that caller's observation round instead of flushing its
+/// own; with no Operation in flight it is itself the original.
 struct StrategyWrite: SyncOperation {
-    let apply: (SharedEnvironment) -> Void
+    let apply: (AsyncStateRuntime) -> Void
 
     func perform(in env: SyncOperationEnvironment) {
-        apply(env.environment)
+        apply(env.environment.asyncState)
     }
 }
