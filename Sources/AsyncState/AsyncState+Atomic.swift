@@ -29,7 +29,7 @@ extension AsyncState where Key == NoKey, Value == Entry {
 
     /// Marks this Address Stale and calls `onRead` again.
     ///
-    /// Synchronous. ``status`` does not change until the strategy calls `apply` or `fail`, so a
+    /// Synchronous. `status` does not change until the strategy calls `apply` or `fail`, so a
     /// `.settled` Address keeps serving its Value while the reload runs. To await the reload,
     /// `read` the `$` Address from an Operation or a Service.
     ///

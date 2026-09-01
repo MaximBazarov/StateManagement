@@ -39,7 +39,7 @@ import Foundation
 /// per-instance. Only `@SMPublished` is Environment state.
 ///
 /// An Atomic or Keyed Value may be backed by an ``AsyncStrategy`` with ``AsyncState``. That is sourced State,
-/// not a fourth shape. `$property` is the wrapper. `$property.status` is the companion Source status.
+/// not a fourth shape. `$property` is the wrapper. `$property.status` is the companion ``AsyncStateStatus``.
 /// Address names the Value. Policy on ``AsyncState`` is how that Address is backed, not a second Address.
 ///
 /// ```swift

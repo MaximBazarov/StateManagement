@@ -4,11 +4,13 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-09-01
+
 ### Changed
 
-- Strategy kicks (`onRead` / `onWrite` / `onDrop`) and inbound verbs (`apply` / `fail` / `markStale`) take the `$` Address, first and unlabeled, with the payload last: `onWrite(address, policy:, value:)`, `apply(address, value:)`, `fail(address, error:)`. Pin `Self` on kicks. No `value: Any` on the handle or `finishAppWrite`. Watch and Operations keep the Value Address. 0.9.x break, no shim.
-- `preheat` takes the `$` Address too, so `preheat(\C.done)` no longer compiles. It had compiled and done nothing. Keyed `preheat`, `refresh`, and `markStale` take `keys: Set<Key>`, so a keyless keyed call does not compile either. This supersedes the "Preheat stays Value-path" line recorded earlier in this section.
 - `@AsyncState` is `AsyncState<S, Key, Entry, Value>`. Atomic is `Key == NoKey, Entry == Value`, Keyed is `Value == [Key: Entry]`, and a dictionary-typed declaration resolves Keyed. `Status` leaves the generic list. A Satellite that pins `S` with a `convenience init` constrains `Key`/`Entry` instead of `Status`, and disfavours the Atomic spelling. 0.9.x break, no shim.
+- Strategy kicks (`onRead` / `onWrite` / `onDrop`) and inbound verbs (`apply` / `fail` / `markStale`) take the `$` Address first and unlabeled, with the payload last: `onWrite(address, policy:, value:)`, `apply(address, value:)`, `fail(address, error:)`. `0.9.3` moved these onto the `$` Address; this settles the order. No `value: Any` on the handle or `finishAppWrite`. Watch and Operations keep the Value Address. 0.9.x break, no shim.
+- `preheat` takes the `$` Address too, so `preheat(\C.done)` no longer compiles. It had compiled and done nothing. Keyed `preheat`, `refresh`, and `markStale` take `keys: Set<Key>`, so a keyless keyed call does not compile either. This replaces the "Preheat stays Value-path" note in `0.9.3`.
 - `SourceStatus` is `AsyncStateStatus`. The last `Source` name is gone.
 - `NoKey` moves to `Core` and is the one spelling for both `Computed` and `AsyncState`.
 - `remove` on a sourced keyed Address evicts rather than deletes: the entry goes back to `.pending`, nothing reaches the strategy, and the next read reloads it. A removal is a change to the Value and it must not escape.
@@ -16,17 +18,30 @@ All notable changes to StateManagement are recorded here. The format follows [Ke
 
 ### Added
 
-- `Sources/AsyncState/` is a scope of its own: the wrapper, `AsyncStrategy`, `AsyncStrategyEnvironment`, `AsyncStateRuntime`, and the `$`-Address counterparts carved out of `AsyncOperation`, `EnvironmentService`, and `Watch`. `SharedEnvironment` keeps one property into it. See ADR 0026.
+- `Sources/AsyncState/` is a scope of its own: the wrapper, `AsyncStrategy`, `AsyncStrategyEnvironment`, `AsyncStateRuntime`, and the `$`-Address counterparts carved out of `AsyncOperation`, `EnvironmentService`, and `Watch`. `SharedEnvironment` keeps one property into it.
+
+### Removed
+
+- `restoreSeed`. It had no caller in the library or in any Satellite strategy, and it left an Address `.pending` with a read already recorded, which no synchronous read could reload. Nothing replaces it.
+- `SharedEnvironment.getValue` / `setValue` / `removeValue`, and the two `read` methods that only forwarded to `getValue`. The type that owns storage now spells them `read` / `write` / `remove`. Internal and test-facing only.
+
+## [0.9.3] - 2026-08-31
+
+### Changed
+
+- `getValue` and `setValue` are gone from `EnvironmentService`, `ComputationEnvironment`, and the `Computed` service surface. The two verbs are `read` and `write` wherever the capability exists.
+- `write` and `remove` take the Address first and unlabelled, and `read` no longer labels it `keyPath:`.
+- `SharedEnvironment.read` is internal. Out-of-package callers read through `StateReader` in `StateManagementTestingSupport`.
+- Strategy kicks (`onRead` / `onWrite` / `onDrop`) and inbound verbs (`apply` / `fail` / `restoreSeed` / `markStale`) take the `$` Address. Pin `Self` on kicks. No `value: Any` on the handle or `finishAppWrite`. Watch and Operations keep the Value Address. Preheat stays Value-path. 0.9.x break, no shim.
+
+### Added
 
 - `SyncOperationEnvironment` and `AsyncOperationEnvironment` read a `Computed`, atomic and keyed, by Address. An Operation does not subscribe; cache, dependency edges, and the cycle guard behave as for any other reader.
 - `AsyncOperationEnvironment` has awaitable `perform` for a non-throwing `AsyncOperation` child, matching `SharedEnvironment`. Fire-and-forget stays.
 
 ### Removed
 
-- `restoreSeed`. It had no caller in the library or in any Satellite strategy, and it left an Address `.pending` with a read already recorded, which no synchronous read could reload. ADR 0026 records the gap.
-- `SharedEnvironment.getValue` / `setValue` / `removeValue`, and the two `read` methods that only forwarded to `getValue`. The type that owns storage now spells them `read` / `write` / `remove`, finishing ADR 0024. Internal and test-facing only.
-
-- `EnvironmentService.setValue` for a `Computed`, both the atomic and the keyed-dictionary overload. A derivation is not swappable at runtime; declare it with `@Computed` and let an Operation write the Values it reads. 0.9.x break, no shim.
+- A Service has no write hatch. The `setValue` family, including both `Computed` overloads, atomic and keyed-dictionary, and `ignoreNotificationsFor` are gone. A Service changes State only by performing an Operation, and a derivation is not swappable at runtime: declare it with `@Computed` and let an Operation write the Values it reads. 0.9.x break, no shim.
 - A `Computed` cannot be written at all. Every write route refuses one, including a dictionary or array of them, so a Container can no longer hold a `Computed` no reader could evaluate.
 
 ### Fixed

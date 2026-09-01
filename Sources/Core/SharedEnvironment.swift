@@ -102,7 +102,9 @@ import Foundation
     func getStorage<Storage: StateContainer>(_ storageType: Storage.Type) -> Storage {
         let id = StorageID(storageType)
 
-        // Trying to get existing value
+        // A Container is only ever stored under StorageID(Storage.self), a few lines down,
+        // so whatever sits under this id is already a Storage. Every state read reaches this
+        // line, so the cast stays unchecked rather than conditional.
         if let storage = warehouse[id] {
             return unsafeDowncast(storage, to: Storage.self)
         }
@@ -604,6 +606,8 @@ import Foundation
 
     private func serviceInstance<Service: EnvironmentService>(_ type: Service.Type) -> (Service, created: Bool) {
         let id = Service.id()
+        // Same guarantee as getStorage: a Service is only ever stored under its own
+        // Service.id(), so whatever sits under this id is already a Service.
         if let existing = serviceWarehouse[id] {
             return (unsafeDowncast(existing, to: Service.self), false)
         }

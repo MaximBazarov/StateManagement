@@ -16,7 +16,7 @@ import Foundation
 
 extension EnvironmentService {
 
-    /// Awaits the sourced Value at a `$` Address, subscribing like ``EnvironmentService/read(_:)``.
+    /// Awaits the sourced Value at a `$` Address, subscribing the way a plain `read` does.
     ///
     /// `.settled` returns the Value with no kick. `.pending` or Stale kicks `onRead`, or Joins the
     /// kick already in flight, and waits for `apply` / `fail`. `.error` throws the stored `Failure`.
