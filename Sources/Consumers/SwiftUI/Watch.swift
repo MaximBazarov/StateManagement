@@ -86,7 +86,7 @@ public struct Watch<Storage: StateContainer, Value>: DynamicProperty {
 
     /// Create a `SwiftUI.Binding<Value>` binding that mutates the value, by performing a generic sync operation - ``InlineValueMutation``.
     ///
-    /// - Parameter mutation: A closure like a ``SyncOperation/perform(in:)``
+    /// - Parameter mutation: A closure like a `perform(in:)`
     /// - Returns: SwiftUI Binding (`SwiftUI.Binding<Value>`).
     public func binding(
         mutation: @escaping (Value, SyncOperationEnvironment) -> Void

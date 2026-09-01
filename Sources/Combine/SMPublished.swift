@@ -29,7 +29,7 @@ import Foundation
 /// It does not compose with ``AsyncState``: both are enclosing-instance wrappers over the same
 /// stored Value, and a property carries one wrapper. Publish a sourced Value by watching it.
 ///
-/// The class must use the default ``ObservableObjectPublisher``.
+/// The class must use the default `ObservableObjectPublisher`.
 ///
 /// - SeeAlso: <doc:Leftover-Combine>
 @propertyWrapper

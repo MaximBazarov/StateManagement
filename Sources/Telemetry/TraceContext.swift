@@ -133,6 +133,7 @@ public struct TraceContext: Sendable {
     /// - Parameters:
     ///   - name: The human-readable name identifying the span operation.
     ///   - kind: The categorization target of the span (e.g. user-facing or internal).
+    ///   - valueDescription: A debug description of the value to attach to the span. Populated only when `TelemetryInternal` is enabled.
     ///   - file: The source code file location. Defaults to caller `#fileID`.
     ///   - line: The source code line number. Defaults to caller `#line`.
     /// - Returns: A non-copyable `Span` lifetime handle.
@@ -250,6 +251,7 @@ extension TraceContext {
     /// - Parameters:
     ///   - name: The human-readable name of the scope.
     ///   - kind: The classification of the operation.
+    ///   - valueDescription: A debug description of the value to attach to the span. Populated only when `TelemetryInternal` is enabled.
     ///   - file: The source code file location.
     ///   - line: The source code line.
     ///   - operation: The execution block representing the span duration.

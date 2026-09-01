@@ -111,7 +111,7 @@ public final class AsyncState<S: AsyncStrategy, Key: Hashable, Entry, Value> {
         self.init(wrappedValue: wrappedValue, policy: policy)
     }
 
-    /// Designated init. App call site is unlabeled ``init(wrappedValue:_:)``.
+    /// Designated init. App call site is unlabeled ``init(wrappedValue:_:)-(Value,S.Policy)``.
     /// A Satellite pins `S` by forwarding here; `S.Policy` does not reverse-infer `S`.
     @_disfavoredOverload
     public init(wrappedValue: Value, policy: S.Policy)
@@ -138,7 +138,7 @@ public final class AsyncState<S: AsyncStrategy, Key: Hashable, Entry, Value> {
         self.init(wrappedValue: wrappedValue, policy: policy)
     }
 
-    /// Designated keyed init. App call site is unlabeled ``init(wrappedValue:_:)``.
+    /// Designated keyed init. App call site is unlabeled ``init(wrappedValue:_:)-([Key:Entry],S.Policy)``.
     /// A Satellite pins `S` by forwarding here; `S.Policy` does not reverse-infer `S`.
     @_disfavoredOverload
     public init(wrappedValue: [Key: Entry], policy: S.Policy)

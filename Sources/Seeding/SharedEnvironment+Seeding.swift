@@ -17,7 +17,7 @@ import Foundation
 
 extension SharedEnvironment {
     /// Creates a fresh ``SharedEnvironment`` and applies the builder’s operations in one
-    /// ``perform(_:file:line:)`` (single notify). Empty builders skip `perform`.
+    /// `perform(_:file:line:)` (single notify). Empty builders skip `perform`.
     ///
     /// DEBUG only. Use for previews and tests.
     public static func seeded(
@@ -28,7 +28,7 @@ extension SharedEnvironment {
         return env
     }
 
-    /// Applies the builder’s operations to this Environment in one ``perform(_:file:line:)``
+    /// Applies the builder’s operations to this Environment in one `perform(_:file:line:)`
     /// (single notify). Empty builders skip `perform`.
     ///
     /// DEBUG only. Use for previews and tests. ``seeded(_:)`` is the factory that creates a

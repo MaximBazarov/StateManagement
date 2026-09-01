@@ -23,7 +23,7 @@ private let strategyLogger = Logger(
 /// Restricted Environment for an AsyncStrategy. Standing for the Environment's lifetime.
 ///
 /// Inbound verbs are hidden Sync operations. No `write`. No `read`. No `spawnService`.
-/// Nested ``perform`` has no `write`. Dead Environment: inbound verbs no-op.
+/// Nested `perform` has no `write`. Dead Environment: inbound verbs no-op.
 ///
 /// > Important: A strategy retains this, never the ``SharedEnvironment``. The Environment owns the
 /// strategy, so holding it back is a cycle; this type holds the Environment weakly and answers

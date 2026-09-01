@@ -31,7 +31,8 @@ import Foundation
 public protocol AsyncStrategy: AnyObject {
     /// Failure type for `$property.status`. Use `Never` if this strategy cannot fail.
     associatedtype Failure: Error
-    /// Per-Address value stored on ``AsyncState`` and passed to ``onRead``, ``onWrite``, and ``onDrop``.
+    /// Per-Address value stored on ``AsyncState`` and passed to ``onRead(_:policy:current:)``,
+    /// ``onWrite(_:policy:value:)``, and ``onDrop(_:policy:)``.
     ///
     /// Default `Void` keeps type-only `@AsyncState(SomeStrategy.self)` for mocks. A non-Void Policy
     /// requires a Policy value at the property wrapper.
@@ -72,7 +73,7 @@ public protocol AsyncStrategy: AnyObject {
     )
 
     /// The sourced Address died because this Address's Container dropped. Default is empty.
-    /// `policy` is the same value ``onRead`` received.
+    /// `policy` is the same value ``onRead(_:policy:current:)`` received.
     func onDrop<Storage: StateContainer, Value>(
         _ address: KeyPath<Storage, AsyncState<Self, NoKey, Value, Value>>,
         policy: Policy

@@ -16,7 +16,7 @@
 import Foundation
 
 /// Collects ``SyncOperation``s for ``SharedEnvironment/seeded(_:)``,
-/// ``SharedEnvironment/seed(_:)``, and ``SwiftUI/View/seedEnvironment(_:)``.
+/// ``SharedEnvironment/seed(_:)``, and `SwiftUI.View.seedEnvironment(_:)`.
 @resultBuilder
 public enum SeedOperationsBuilder {
     public static func buildExpression(_ operation: any SyncOperation) -> [any SyncOperation] {

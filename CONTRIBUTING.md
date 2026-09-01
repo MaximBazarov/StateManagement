@@ -61,6 +61,8 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 //===----------------------------------------------------------------------===//
 ```
 
+- When linking an overloaded symbol, carry the full signature (``onRead(_:policy:current:)``). When two overloads differ only by type — DocC gives a readable disambiguator (``write(_:value:)-(_,Value)``) — use it. When overloads differ only by an `async`/`throws` effect (same erased parameter types), DocC's only disambiguator is an opaque hash (`-710qe`) — don't embed one; drop to a plain unlinked ``name`` instead. A hash breaks silently the next time the declaration changes and DocC recomputes it.
+
 ## Pull requests
 
 - Branch off `main`.

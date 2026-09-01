@@ -39,3 +39,28 @@ jobs:
 
       - name: Test (${{ matrix.platform }})
         run: ${{ matrix.command }}
+
+  docs:
+    name: Docs (warning-free)
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Docs build (warning-free)
+        run: |
+          set -o pipefail
+          xcodebuild docbuild \
+            -scheme StateManagement-Package \
+            -destination 'platform=macOS' \
+            2>&1 | tee docbuild.log
+          if grep -q "warning:" docbuild.log; then
+            echo "::error::docbuild emitted warnings — see log above"
+            exit 1
+          fi

@@ -20,7 +20,7 @@ import Foundation
 ///
 /// Prefer named operations in production code. Use ``Write`` in previews and tests with
 /// ``SharedEnvironment/seeded(_:)``, ``SharedEnvironment/seed(_:)``, or
-/// ``SwiftUI/View/seedEnvironment(_:)``.
+/// `SwiftUI.View.seedEnvironment(_:)`.
 @MainActor public struct Write<Storage: StateContainer, Value>: SyncOperation {
     private let apply: (SyncOperationEnvironment) -> Void
 
