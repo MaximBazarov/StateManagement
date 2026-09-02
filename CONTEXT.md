@@ -45,8 +45,8 @@ The name of a Value. Always into one Container. For an Atomic value, a key path.
 _Avoid_: ValueID, and calling the key path alone the Address of a Keyed value
 
 **`$` Address**:
-The name of the AsyncStrategy seam for a Value declared with `@AsyncState`: the path to the `AsyncState` wrapper rather than to the Value, plus a key when Keyed. Kicks, inbound verbs, and the awaitable read take it. Watch and Operations take the Address.
-_Avoid_: calling it a Value or a fourth shape, and using the Address on the strategy seam
+An Address spelled with `$`, naming the wrapper rather than the Value it wraps, plus a key when Keyed. A `Computed` has only this Address; an `@AsyncState` has it as the AsyncStrategy seam, with its Value at the plain path.
+_Avoid_: reading `$` as one wrapper kind, and using the plain Address on the strategy seam
 
 **Atomic value**:
 A Value that is the whole fact at one name in a Container.
@@ -63,7 +63,7 @@ _Avoid_: derived state, selector, reducer
 ### AsyncStrategy
 
 **AsyncStrategy**:
-Owns read, write, and external side effects for Addresses declared with `@AsyncState`. The Environment owns one instance per type and always holds the Value. `onRead`, `onWrite`, and `onDrop` take the `$` Address and a Policy value.
+Owns read, write, and external side effects for Addresses declared with `@AsyncState`. The Environment owns one instance per type and always holds the Value. `onRead`, `onWrite`, and `onDrop` take the `$` Address and a Policy value, as do the inbound verbs and the awaitable read; Watch and Operations take the Value's plain Address.
 _Avoid_: Source, ExternalSource, Bridge, inbound Service, using Service for this, one instance per Address, persist Service as the write path
 
 **Policy**:
