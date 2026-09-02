@@ -54,6 +54,16 @@ final class TestWatchState: StateContainer {
     @Computed var boxKeyedComputed = { (env: ComputationEnvironment, key: String) -> Box in
         Box(n: env.read(\TestWatchState.counter) + key.count)
     }
+
+    // Optional-Output keyed computed: nothing decides a state for an untracked row, so the author
+    // declares `Output` Optional and answers `nil`. A Watch binds that as `Bool?`, not `Bool??`.
+    var trackedRows: Set<UUID> = []
+    var rowFlags: [UUID: Bool] = [:]
+
+    @Computed<UUID, Bool?> var rowState = { env, id in
+        guard env.read(\TestWatchState.trackedRows).contains(id) else { return nil }
+        return env.read(\TestWatchState.rowFlags, key: id) ?? false
+    }
 }
 
 struct UpdateValue: SyncOperation {
@@ -96,6 +106,15 @@ struct SetBoxDict: SyncOperation {
     let key: String; let n: Int
     func perform(in env: SyncOperationEnvironment) {
         env.write(\TestWatchState.boxDict, key: key, value: Box(n: n))
+    }
+}
+
+struct TrackRow: SyncOperation {
+    let id: UUID
+    func perform(in env: SyncOperationEnvironment) {
+        var tracked = env.read(\TestWatchState.trackedRows)
+        tracked.insert(id)
+        env.write(\TestWatchState.trackedRows, value: tracked)
     }
 }
 
@@ -391,6 +410,31 @@ struct WatchTests {
         #expect(row5.lastValue == false)
         #expect(row7.renderCount == 2)
         #expect(row7.lastValue == true)
+    }
+
+    /// The consumer half of the keyed-optionality verdict. A Computed always runs, so the
+    /// framework adds no Optional of its own: an Optional `Output` reaches the watcher as
+    /// `Bool?` rather than `Bool??`, and `nil` diffs like any other output.
+    @Test("Watch binds an Optional Computed Output as-is and diffs nil like any value")
+    func keyedComputed_optionalOutputBindsAndDiffs() {
+        let env = SharedEnvironment()
+        let row = UUID()
+        let otherRow = UUID()
+        let probe = ValueObserverProbe<TestWatchState, Bool?>
+            .watch(computedKeyed: \.$rowState, key: row, in: env)
+
+        probe.expect(value: nil)
+
+        // Tracking another row invalidates this one's entry too, but the derivation still declines
+        // it: an unchanged `nil` suppresses exactly as an unchanged non-Optional output would.
+        probe.perform(TrackRow(id: otherRow))
+        probe.expect(updates: 0)
+
+        probe.perform(TrackRow(id: row))
+        probe.expect(updates: 1)
+
+        let bound: Bool? = probe.render()
+        #expect(bound == false)
     }
 
     /// A suppressed keyed-computed notification must not drop the subscription.

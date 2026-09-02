@@ -37,6 +37,16 @@ final class ComputedState: StateContainer {
         let e0 = env.read(\ComputedState.e, key: "0") ?? ""
         return "\(a)-\(b)-\(e0)"
     }
+
+    // A partial derivation: nothing in the Container decides readiness for an untracked id, so the
+    // author declares `Output` Optional and answers `nil`. The framework never adds that Optional.
+    var trackedIDs: Set<UUID> = []
+    var readiness: [UUID: Bool] = [:]
+
+    @Computed<UUID, Bool?> var isReady = { env, id in
+        guard env.read(\ComputedState.trackedIDs).contains(id) else { return nil }
+        return env.read(\ComputedState.readiness, key: id) ?? false
+    }
 }
 
 /// Service that reads the computation value on `serve`
@@ -136,6 +146,26 @@ struct MutateUnrelated: SyncOperation {
         /// So it should not trigger an update.
         env.write(\ComputedState.e, key: "1", value: "AAA")
         env.write(\ComputedState.d, value: 11)
+    }
+}
+
+/// Brings an id under the derivation's rule, so `isReady` stops declining it.
+struct TrackID: SyncOperation {
+    let id: UUID
+
+    func perform(in env: SyncOperationEnvironment) {
+        var tracked = env.read(\ComputedState.trackedIDs)
+        tracked.insert(id)
+        env.write(\ComputedState.trackedIDs, value: tracked)
+    }
+}
+
+struct SetReadiness: SyncOperation {
+    let id: UUID
+    let isReady: Bool
+
+    func perform(in env: SyncOperationEnvironment) {
+        env.write(\ComputedState.readiness, key: id, value: isReady)
     }
 }
 
@@ -267,4 +297,32 @@ struct ComputedTests {
         #expect(service.lastComputationValue == initial)
     }
 
+    // MARK: - Optional Output
+
+    /// A keyed Computed read is never Optional, because a Computed always runs. Partiality is the
+    /// author's to declare, so `nil` here is the closure's own answer and behaves like any other
+    /// output: cached per key, invalidated by the input that decided it.
+    @Test("A keyed Computed with Optional Output answers nil for a key it declines")
+    @MainActor func optionalOutputKeyedComputedDeclinesAKey() {
+        let env = SharedEnvironment()
+        let tracked = UUID()
+        let untracked = UUID()
+        env.perform(TrackID(id: tracked))
+        env.perform(SetReadiness(id: tracked, isReady: true))
+
+        let declined = ValueObserverProbe<ComputedState, Bool?>
+            .watch(computedKeyed: \.$isReady, key: untracked, in: env)
+        let answered = ValueObserverProbe<ComputedState, Bool?>
+            .watch(computedKeyed: \.$isReady, key: tracked, in: env)
+
+        declined.expect(value: nil)
+        answered.expect(value: true)
+
+        // Tracking the declined id invalidates only its entry: the derivation reruns and now
+        // answers, which is what proves the earlier `nil` was a real output rather than a miss.
+        declined.perform(TrackID(id: untracked))
+        declined.expect(updates: 1)
+        declined.expect(value: false)
+        answered.expect(value: true)
+    }
 }

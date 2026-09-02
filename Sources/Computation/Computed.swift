@@ -50,6 +50,11 @@ A Computed is derived, not stored. Declare it with @Computed and reach it throug
 /// (`fatalError`). The cycle cannot be broken at runtime because the read is what would supply the
 /// value it is waiting for.
 ///
+/// A Computed always runs, so reading one is never Optional — at a key just as much as atomically.
+/// `Optional` marks what the framework knows may be missing, which a stored keyed entry is
+/// (``StateContainer``) and a derivation is not. A genuinely partial derivation declares that
+/// itself as `Computed<Key, Output?>` and returns `nil` for a key it declines.
+///
 /// In the following example `count` recomputes when `items` change; `isDone`
 /// recomputes when that id's `done` flag changes.
 /// ```swift
@@ -62,7 +67,8 @@ A Computed is derived, not stored. Declare it with @Computed and reach it throug
 ///         env.read(\ListContainer.items).count
 ///     }
 ///
-///     // Keyed computed: derived per item id.
+///     // Keyed computed: derived per item id. `done` is stored, so its keyed read is Optional;
+///     // picking `false` for an absent entry is the author's answer, not the framework's.
 ///     @Computed<UUID, Bool> var isDone = { env, id in
 ///         env.read(\ListContainer.done, key: id) ?? false
 ///     }
