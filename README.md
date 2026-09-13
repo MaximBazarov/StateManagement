@@ -14,8 +14,8 @@ final class CounterContainer: StateContainer {
 
 struct Increment: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let count = env.read(keyPath: \CounterContainer.count)
-        env.write(count + 1, keyPath: \CounterContainer.count)
+        let count = env.read(\CounterContainer.count)
+        env.write(\CounterContainer.count, value: count + 1)
     }
 }
 
