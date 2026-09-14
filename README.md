@@ -79,7 +79,7 @@ Add the package with Swift Package Manager, then depend on the products you need
 .testTarget(name: "MyFeatureTests", dependencies: ["MyFeature", "StateManagementTestingSupport"]),
 ```
 
-Both Swift examples above live in [`Snippets/`](Snippets); `swift build` compiles them and CI checks they still match this file.
+The QuickStart and leftover-Combine examples live in [`Snippets/`](Snippets); `swift build` compiles them and CI checks they still match this file.
 
 See [PHILOSOPHY.md](PHILOSOPHY.md) for what it will and will not do, and [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 
