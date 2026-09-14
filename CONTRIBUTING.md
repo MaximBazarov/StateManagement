@@ -37,6 +37,7 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 - `Sources/` the library.
 - `Tests/` the tests.
 - `Snippets/` the README's Swift examples, compiled by `swift build`. Edit an example here and in `README.md` together; `Scripts/check-docs.sh` compares them byte for byte, and also checks the README version line against the newest `CHANGELOG.md` release.
+- `Scripts/` checks you can run locally. `check-docs.sh` guards `README.md`.
 - `TestingSupport/` helpers we ship so users can test their own code against the library.
 - `docs/adr/` accepted contributor decisions. A README until a proposal is accepted.
 
