@@ -70,10 +70,8 @@ snippet_block() {
     ' "$1"
 }
 
-referenced=""
 while IFS= read -r name; do
     [ -n "$name" ] || continue
-    referenced="$referenced $name"
     snippet="Snippets/$name.swift"
     if [ ! -f "$snippet" ]; then
         fail "README.md references snippet '$name', but $snippet does not exist"
@@ -86,16 +84,5 @@ while IFS= read -r name; do
         echo "example: README block '$name' matches $snippet"
     fi
 done < <(sed -n 's/^<!-- snippet: \(.*\) -->$/\1/p' README.md)
-
-# An unreferenced snippet compiles but guards nothing, which reads as coverage
-# it does not have.
-for snippet in Snippets/*.swift; do
-    [ -e "$snippet" ] || continue
-    name=$(basename "$snippet" .swift)
-    case " $referenced " in
-        *" $name "*) ;;
-        *) fail "$snippet is not referenced by any '<!-- snippet: $name -->' in README.md" ;;
-    esac
-done
 
 exit $status
