@@ -115,7 +115,8 @@ struct RemoveValueTests {
     /// Removing a key the computation never read must NOT re-serve the consumer.
     @Test func removingUnreadKeyDoesNotRecompute() async throws {
         let env = SharedEnvironment()
-        let waiter = Waiter(expectedCount: 1)
+        // A serve must NOT arrive, so this wait always runs out its deadline: keep it short.
+        let waiter = Waiter(expectedCount: 1, timeout: .seconds(1))
         let service = await env.spawnService(SumTracingService.self)
         service.waiter = waiter
 

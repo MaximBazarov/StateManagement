@@ -212,7 +212,8 @@ struct ComputedTests {
     /// Testing that unrelated to computation changes do not trigger serve (re-compute).
     @Test @MainActor func computedUnrelatedMutations() async throws {
         let env = SharedEnvironment()
-        let waiter = Waiter(expectedCount: 2)
+        // A serve must NOT arrive, so this wait always runs out its deadline: keep it short.
+        let waiter = Waiter(expectedCount: 2, timeout: .seconds(1))
         let service = await env.spawnService(TracingService.self)
         let secondService = await env.spawnService(SecondTracingService.self)
         service.waiter = waiter
@@ -274,7 +275,8 @@ struct ComputedTests {
 
     @Test @MainActor func keyedComputedUnrelatedChanges() async throws {
         let env = SharedEnvironment()
-        let waiter = Waiter(expectedCount: 1)
+        // A serve must NOT arrive, so this wait always runs out its deadline: keep it short.
+        let waiter = Waiter(expectedCount: 1, timeout: .seconds(1))
         let service = await env.spawnService(KeyedTracingService.self)
         service.waiter = waiter
 
