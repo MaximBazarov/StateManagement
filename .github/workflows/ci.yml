@@ -64,3 +64,16 @@ jobs:
             echo "::error::docbuild emitted warnings — see log above"
             exit 1
           fi
+
+  # `Snippets/` is compiled by the `swift build` step in the `test` job; this
+  # job only checks that README.md still matches it, and the version line.
+  docs-drift:
+    name: Docs (README drift)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check README against CHANGELOG and Snippets/
+        run: ./Scripts/check-docs.sh
