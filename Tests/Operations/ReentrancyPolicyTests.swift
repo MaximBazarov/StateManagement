@@ -79,10 +79,22 @@ struct ReentrancyFirstWinsTests {
 
         async let first: Void = env.perform(HoldThenAdd(gate: gate, amount: 1))
         await gate.waitForArrival()
-        async let second: Void = env.perform(HoldThenAdd(gate: gate, amount: 10))
+
+        // The duplicate must reach the firstWins Join while the first Execution is still live.
+        // An `async let` child is nonisolated and hops to the MainActor at an arbitrary later
+        // point, so releasing the gate right away races: the first Execution can finish before
+        // the duplicate joins, and the duplicate then legitimately starts its own Execution and
+        // holds the gate forever. A MainActor Task enqueues its first slice immediately, and the
+        // join happens synchronously inside that slice; yielding the actor lets that queued slice
+        // run while `first` is still held at the gate, so the Join is guaranteed.
+        let second = Task { @MainActor in
+            await env.perform(HoldThenAdd(gate: gate, amount: 10))
+        }
+        for _ in 0..<100 { await Task.yield() }
+
         gate.release()
         await first
-        await second
+        await second.value
 
         #expect(gate.arrivals == 1)
         #expect(env.read(\RunAllState.total) == 1)
