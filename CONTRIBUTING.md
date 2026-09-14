@@ -73,6 +73,7 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 - Link the issue. Link the ADR once the library developer has written it.
 - Make sure the build and tests pass.
 - In the description, say why, not just what.
+- Commits are attributed only to Maxim Bazarov. Never add agent `Co-authored-by` trailers (Cursor, bots, or other assistants) to commit messages or squash messages.
 
 ## Reporting bugs and ideas
 
