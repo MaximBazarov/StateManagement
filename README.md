@@ -1,9 +1,10 @@
 # StateManagement
 
-Experimental. v0.9.2. The public API will break until 1.0.0.
+Experimental. v0.9.4. The public API will break until 1.0.0.
 
 StateManagement is a state library for Swift and SwiftUI. One Environment owns all State. State is sliced into Containers. You read a Value with `@Watch`. You change it only through an Operation. Observation is per Value, and per key in a dictionary. The Environment is not SwiftUI’s `@Environment`. It resolves Containers for you, in views and outside them, with no DI container.
 
+<!-- snippet: QuickStart -->
 ```swift
 import SwiftUI
 import StateManagement
@@ -14,8 +15,8 @@ final class CounterContainer: StateContainer {
 
 struct Increment: SyncOperation {
     func perform(in env: SyncOperationEnvironment) {
-        let count = env.read(keyPath: \CounterContainer.count)
-        env.write(count + 1, keyPath: \CounterContainer.count)
+        let count = env.read(\CounterContainer.count)
+        env.write(\CounterContainer.count, value: count + 1)
     }
 }
 
@@ -28,7 +29,7 @@ struct CounterView: View {
     }
 }
 
-CounterView()
+let root = CounterView()
     .sharedEnvironment(SharedEnvironment())
 ```
 
@@ -36,6 +37,7 @@ A `Computed` derives a Value, a Service reacts, and a Satellite ships the AsyncS
 
 Replace `@Published` with `@SMPublished` to keep leftover Combine call sites while the Environment owns the Value.
 
+<!-- snippet: LeftoverCombine -->
 ```swift
 import Combine
 import StateManagement
@@ -45,8 +47,8 @@ final class SettingsController: StateContainer, ObservableObject {
 }
 
 let leftover = SettingsController()
-leftover.theme = "dark"              // always SharedEnvironment.shared
-leftover.$theme.sink { print($0) }   // Publisher<Value, Never>, not Published.Publisher
+leftover.theme = "dark"                       // always SharedEnvironment.shared
+let sub = leftover.$theme.sink { print($0) }  // Publisher<Value, Never>, not Published.Publisher
 ```
 
 `@Watch` and Operations use the Environment they were given. Leftover Combine cannot. Tests that go through `instance.theme` use `.shared` plus `reset()`. `$` does not support `assign(to:)`.
@@ -76,6 +78,8 @@ Add the package with Swift Package Manager, then depend on the products you need
 .target(name: "MyFeature", dependencies: ["StateManagement"]),
 .testTarget(name: "MyFeatureTests", dependencies: ["MyFeature", "StateManagementTestingSupport"]),
 ```
+
+The QuickStart and leftover-Combine examples live in [`Snippets/`](Snippets); `swift build` compiles them and CI checks they still match this file.
 
 See [PHILOSOPHY.md](PHILOSOPHY.md) for what it will and will not do, and [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 

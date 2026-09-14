@@ -23,6 +23,7 @@ You need Swift 6.2 or later, and Xcode (not Command Line Tools alone).
 - Build: `swift build`
 - Test (macOS / host): `swift test`
 - Test (iOS Simulator): `xcodebuild test -scheme StateManagement-Package -destination 'platform=iOS Simulator,name=iPhone 17'`
+- Check the README: `./Scripts/check-docs.sh`
 
 CI runs the suite on a macOS **and** an iOS Simulator on every pull request (matrix in `.github/workflows/ci.yml`), so run both locally before opening one. The iOS leg mainly catches platform-only API leaks early. Cycle-guard trap tests use Swift Testing exit tests (a subprocess); that API is unavailable on iOS, so those three compile out there and the rest of the target still runs.
 
@@ -35,6 +36,8 @@ Swift Package Index only *builds* the package (for the compatibility matrix) and
 - `CONTEXT.md` the glossary. Use those names; a word under `_Avoid_` is one we do not use for that concept.
 - `Sources/` the library.
 - `Tests/` the tests.
+- `Snippets/` the README's Swift examples, compiled by `swift build`. Edit an example here and in `README.md` together; `Scripts/check-docs.sh` compares them byte for byte, and also checks the README version line against the newest `CHANGELOG.md` release.
+- `Scripts/` checks you can run locally. `check-docs.sh` guards `README.md`.
 - `TestingSupport/` helpers we ship so users can test their own code against the library.
 - `docs/adr/` accepted contributor decisions. A README until a proposal is accepted.
 
